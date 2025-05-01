@@ -11,23 +11,28 @@ import json
 
 from langchain.schema import Document
 from langchain.vectorstores import FAISS, Chroma
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 from langchain.embeddings.base import Embeddings
+
+# Import our custom vector stores and embedding models
 from ..vector_store.gemini_embeddings import GeminiEmbeddings
+from ..vector_store.openai_embeddings import OpenAIEmbeddings
+from ..vector_store.astra_db import AstraDBStore
 
 
 class DocumentIndexer:
     """Handles indexing of documents in vector stores with security filtering."""
 
-    VECTOR_STORES = {"faiss": FAISS, "chroma": Chroma}
+    VECTOR_STORES = {
+        "faiss": FAISS, 
+        "chroma": Chroma, 
+        "astradb": AstraDBStore
+    }
 
     EMBEDDING_MODELS = {
         "openai": lambda **kwargs: OpenAIEmbeddings(
             model=kwargs.get("model", "text-embedding-ada-002")
         ),
-        "huggingface": lambda **kwargs: HuggingFaceEmbeddings(
-            model_name=kwargs.get("model", "all-MiniLM-L6-v2")
-        ),
+        "huggingface": lambda **kwargs: None,  # Placeholder for HuggingFaceEmbeddings
         "gemini": lambda **kwargs: GeminiEmbeddings(
             model=kwargs.get("model", "embedding-001"),
             task_type=kwargs.get("task_type", "RETRIEVAL_DOCUMENT")
@@ -40,6 +45,8 @@ class DocumentIndexer:
         embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-ada-002",
         persist_directory: str = None,
+        hybrid_search: bool = True,
+        astra_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the document indexer.
@@ -49,6 +56,8 @@ class DocumentIndexer:
             embedding_provider: Provider of embedding model
             embedding_model: Name of embedding model to use
             persist_directory: Directory to persist vector store
+            hybrid_search: Whether to enable hybrid search for supported vector stores
+            astra_config: Configuration for AstraDB connection
         """
         if vector_store_type not in self.VECTOR_STORES:
             raise ValueError(
@@ -64,6 +73,8 @@ class DocumentIndexer:
 
         self.vector_store_type = vector_store_type
         self.persist_directory = persist_directory
+        self.hybrid_search = hybrid_search
+        self.astra_config = astra_config or {}
 
         # Initialize embedding model
         self.embedding_model = self.EMBEDDING_MODELS[embedding_provider](
@@ -98,6 +109,24 @@ class DocumentIndexer:
                 documents=documents if documents else [],
                 embedding=self.embedding_model,
                 persist_directory=self.persist_directory,
+            )
+            
+        elif self.vector_store_type == "astradb":
+            # Configure AstraDB
+            if not documents:
+                documents = []
+                
+            # Create AstraDB store with hybrid search if enabled
+            self.vector_store = AstraDBStore.from_documents(
+                documents=documents,
+                embedding=self.embedding_model,
+                collection_name=self.astra_config.get("collection_name", "zed_kb_documents"),
+                token=self.astra_config.get("token"),
+                api_endpoint=self.astra_config.get("api_endpoint"),
+                astra_db_id=self.astra_config.get("astra_db_id"),
+                astra_db_region=self.astra_config.get("astra_db_region"),
+                namespace=self.astra_config.get("namespace"),
+                hybrid_search=self.hybrid_search,
             )
 
     def add_documents(self, documents: List[Document]) -> List[str]:
@@ -190,6 +219,7 @@ class DocumentIndexer:
         user_info: Dict[str, Any] = None,
         k: int = 5,
         filter_metadata: Dict[str, Any] = None,
+        hybrid_alpha: float = 0.5,  # Balance between vector and keyword search
     ) -> List[Document]:
         """
         Search for documents in the vector store.
@@ -199,6 +229,7 @@ class DocumentIndexer:
             user_info: User information for security filtering
             k: Number of documents to return
             filter_metadata: Additional metadata filter
+            hybrid_alpha: Ratio between vector and keyword search (0 = only keywords, 1 = only vector)
 
         Returns:
             List of matching documents
@@ -208,7 +239,7 @@ class DocumentIndexer:
             return []
 
         # Create metadata filter
-        metadata_filter = filter_metadata
+        metadata_filter = filter_metadata or {}
 
         # Apply security filtering if user info is provided
         if user_info:
@@ -220,24 +251,42 @@ class DocumentIndexer:
                 results = self.vector_store.similarity_search(
                     query, k=k * 5
                 )  # Get more to filter down
-                filtered_results = [
-                    doc for doc in results if filter_fn(doc.metadata)]
+                filtered_results = [doc for doc in results if filter_fn(doc.metadata)]
                 return filtered_results[:k]
 
-            # For Chroma, we can use the filter argument
-            elif self.vector_store_type == "chroma":
-                # First, filter by department if provided in user_info
-                user_dept = user_info.get("department")
-                if user_dept and not metadata_filter:
-                    metadata_filter = {"department": user_dept}
-                elif user_dept and metadata_filter:
-                    metadata_filter = {
-                        **metadata_filter, "department": user_dept}
+            # Add role-based access control metadata to filter
+            if user_info.get("roles"):
+                metadata_filter["allowed_roles"] = {"$in": user_info["roles"]}
+                
+            # Add clearance level filtering
+            if user_info.get("clearance"):
+                user_clearance = user_info["clearance"]
+                # Convert to numeric levels for comparison
+                clearance_levels = {
+                    "public": 0,
+                    "internal": 1,
+                    "confidential": 2,
+                    "restricted": 3,
+                }
+                user_clearance_level = clearance_levels.get(user_clearance, 0)
+                
+                # Filter to only include documents with equal or lower security level
+                # This is a simplified approach - different vector stores may require different implementations
+                if self.vector_store_type == "astradb":
+                    # For AstraDB, we'll use a direct comparison if possible
+                    eligible_levels = [k for k, v in clearance_levels.items() if v <= user_clearance_level]
+                    metadata_filter["security_level"] = {"$in": eligible_levels}
 
-        # Perform the search
-        results = self.vector_store.similarity_search(
-            query, k=k, filter=metadata_filter
-        )
+        # Perform the search with hybrid capabilities for AstraDB
+        if self.vector_store_type == "astradb" and self.hybrid_search:
+            results = self.vector_store.similarity_search(
+                query, k=k, filter=metadata_filter, hybrid_alpha=hybrid_alpha
+            )
+        else:
+            # Standard vector search for other vector stores
+            results = self.vector_store.similarity_search(
+                query, k=k, filter=metadata_filter
+            )
 
         return results
 
@@ -257,8 +306,13 @@ class DocumentIndexer:
         try:
             # Different vector stores have different deletion methods
             if hasattr(self.vector_store, "delete"):
-                for doc_id in document_ids:
-                    self.vector_store.delete(doc_id)
+                if self.vector_store_type == "astradb":
+                    # AstraDB handles deletions in one operation
+                    self.vector_store.delete(document_ids)
+                else:
+                    # Delete one by one for other vector stores
+                    for doc_id in document_ids:
+                        self.vector_store.delete(doc_id)
             elif hasattr(self.vector_store, "delete_by_filter"):
                 for doc_id in document_ids:
                     self.vector_store.delete_by_filter({"document_id": doc_id})
@@ -293,6 +347,9 @@ class DocumentIndexer:
             elif self.vector_store_type == "chroma" and self.persist_directory:
                 self.vector_store.persist()
                 return True
+            # AstraDB is cloud-based so no need to save locally
+            elif self.vector_store_type == "astradb":
+                return True
 
             return False
 
@@ -312,8 +369,7 @@ class DocumentIndexer:
         """
         try:
             if self.vector_store_type == "faiss":
-                self.vector_store = FAISS.load_local(
-                    file_path, self.embedding_model)
+                self.vector_store = FAISS.load_local(file_path, self.embedding_model)
                 return True
             elif self.vector_store_type == "chroma" and os.path.exists(
                 self.persist_directory
@@ -322,6 +378,11 @@ class DocumentIndexer:
                     persist_directory=self.persist_directory,
                     embedding_function=self.embedding_model,
                 )
+                return True
+            # For AstraDB, we just need to reconnect to the existing collection
+            elif self.vector_store_type == "astradb":
+                # Initialize a connection to the existing AstraDB collection
+                self._initialize_vector_store()
                 return True
 
             return False

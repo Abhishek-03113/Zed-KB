@@ -10,6 +10,8 @@ python-dotenv>=1.0.0
 # Vector stores 
 faiss-cpu>=1.7.4
 chromadb>=0.4.6
+astrapy>=0.5.1
+cassandra-driver>=3.28.0
 
 # Large language model interfaces
 openai>=1.3.0

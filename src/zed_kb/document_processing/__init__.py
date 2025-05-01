@@ -20,17 +20,21 @@ class DocumentProcessor:
         persist_directory: str = None,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
+        hybrid_search: bool = True,
+        astra_config: dict = None,
     ):
         """
         Initialize the document processor.
 
         Args:
-            vector_store_type: Type of vector store to use
-            embedding_provider: Provider of embedding model
+            vector_store_type: Type of vector store to use ('faiss', 'chroma', or 'astradb')
+            embedding_provider: Provider of embedding model ('openai' or 'gemini')
             embedding_model: Name of embedding model to use
             persist_directory: Directory to persist vector store
             chunk_size: Size of document chunks
             chunk_overlap: Overlap between chunks
+            hybrid_search: Enable hybrid search (vector + keyword) for supported vector stores
+            astra_config: Configuration for AstraDB connection (if using 'astradb')
         """
         self.loader = DocumentLoader()
         self.chunker = DocumentChunker(
@@ -42,6 +46,8 @@ class DocumentProcessor:
             embedding_provider=embedding_provider,
             embedding_model=embedding_model,
             persist_directory=persist_directory,
+            hybrid_search=hybrid_search,
+            astra_config=astra_config,
         )
 
     def process_file(
@@ -138,6 +144,7 @@ class DocumentProcessor:
         user_info: dict = None,
         k: int = 5,
         filter_metadata: dict = None,
+        hybrid_alpha: float = 0.5,
     ) -> list:
         """
         Search for documents with security filtering.
@@ -147,8 +154,11 @@ class DocumentProcessor:
             user_info: User information for security filtering
             k: Number of documents to return
             filter_metadata: Additional metadata filter
+            hybrid_alpha: Ratio between vector and keyword search (0 = only keywords, 1 = only vector)
 
         Returns:
             List of matching documents
         """
-        return self.indexer.search(query, user_info, k, filter_metadata)
+        return self.indexer.search(
+            query, user_info, k, filter_metadata, hybrid_alpha=hybrid_alpha
+        )
