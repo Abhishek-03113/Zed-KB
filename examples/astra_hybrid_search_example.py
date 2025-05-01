@@ -1,6 +1,7 @@
 """
 Example script demonstrating AstraDB Vector Store with hybrid search capabilities.
-This example shows how to use OpenAI or Gemini embeddings with AstraDB vector database.
+This example shows how to use Gemini embeddings with AstraDB vector database for
+analyzing Twitter data related to climate change.
 """
 
 import os
@@ -17,81 +18,16 @@ dotenv.load_dotenv()
 from src.zed_kb.document_processing import DocumentProcessor
 
 
-def astra_openai_example():
-    """Example using AstraDB with OpenAI embeddings"""
+def astra_gemini_climate_analytics():
+    """Example using AstraDB with Gemini embeddings for Twitter climate change analytics"""
     
-    print("\n*** AstraDB with OpenAI Embeddings Example ***\n")
+    print("\n*** AstraDB with Gemini Embeddings for Twitter Climate Analytics Example ***\n")
     
-    # Configure AstraDB connection (replace with your own values)
+    # Configure AstraDB connection
     astra_config = {
         "token": os.environ.get("ASTRA_DB_APPLICATION_TOKEN"),
         "api_endpoint": os.environ.get("ASTRA_DB_API_ENDPOINT"),
-        # Or use database ID and region:
-        # "astra_db_id": "your-db-id",
-        # "astra_db_region": "your-db-region",
-        "collection_name": "zed_kb_openai_documents"
-    }
-
-    # Set up document processor with AstraDB and OpenAI embeddings
-    processor = DocumentProcessor(
-        vector_store_type="astradb",
-        embedding_provider="openai",  # Using OpenAI embeddings
-        embedding_model="text-embedding-ada-002",  # Or "text-embedding-3-small" for newer model
-        hybrid_search=True,  # Enable hybrid search
-        astra_config=astra_config,
-    )
-    
-    # Process a document with access control metadata
-    print("Processing document with OpenAI embeddings...")
-    doc_ids = processor.process_file(
-        file_path="./data/test.pdf",
-        metadata={
-            "department": "legal",
-            "project": "compliance",
-            "importance": "high"
-        },
-        security_level="confidential",
-        allowed_roles=["legal", "executive", "compliance_officer"],
-    )
-    print(f"  Processed document IDs: {doc_ids}")
-
-    # Search for documents with role-based access
-    print("\nSearching as Legal Team Member:")
-    legal_user = {
-        "user_id": "jane.legal@company.com",
-        "roles": ["legal"],
-        "clearance": "confidential",
-        "department": "legal",
-    }
-
-    # Search with hybrid search (mix of vector and keyword)
-    results = processor.search(
-        query="compliance requirements for financial institutions",
-        user_info=legal_user,
-        k=3,
-        hybrid_alpha=0.5,  # Balance between vector and keyword search
-    )
-
-    print(f"  Found {len(results)} results for legal team member")
-    for i, doc in enumerate(results):
-        print(
-            f"  {i+1}. Security: {doc.metadata.get('security_level', 'Unknown')} - "
-            f"Department: {doc.metadata.get('department', 'Unknown')}"
-        )
-        print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
-        print(f"     {doc.page_content[:100]}...")
-
-
-def astra_gemini_example():
-    """Example using AstraDB with Gemini embeddings"""
-    
-    print("\n*** AstraDB with Gemini Embeddings Example ***\n")
-    
-    # Configure AstraDB connection (replace with your own values)
-    astra_config = {
-        "token": os.environ.get("ASTRA_DB_APPLICATION_TOKEN"),
-        "api_endpoint": os.environ.get("ASTRA_DB_API_ENDPOINT"),
-        "collection_name": "zed_kb_gemini_documents"
+        "collection_name": "twitter_climate_analytics"
     }
 
     # Set up document processor with AstraDB and Google Gemini embeddings
@@ -103,59 +39,98 @@ def astra_gemini_example():
         astra_config=astra_config,
     )
     
-    # Process the document with role-based access control
-    print("Processing document with Gemini embeddings...")
+    # Process the Twitter climate change report
+    print("Processing Twitter climate change analytics report...")
     doc_ids = processor.process_file(
         file_path="./data/test.pdf",
         metadata={
-            "department": "engineering",
-            "project": "api_development",
-            "importance": "medium"
+            "category": "social_media_analytics", 
+            "topic": "climate_change", 
+            "source": "twitter",
+            "analysis_type": "sentiment_analysis",
+            "project": "climate_research",
+            "importance": "high"
         },
         security_level="internal",
-        allowed_roles=["developer", "tech_lead", "product_manager"],
+        allowed_roles=["researcher", "analyst", "data_scientist", "policy_advisor"],
     )
     print(f"  Processed document IDs: {doc_ids}")
 
-    # Search for documents with role-based access
-    print("\nSearching as Developer:")
-    developer = {
-        "user_id": "alex.dev@company.com",
-        "roles": ["developer"],
+    # Different user roles searching for climate data
+    
+    # Climate researcher search
+    print("\nSearching as Climate Researcher:")
+    researcher = {
+        "user_id": "climate.researcher@org.com",
+        "roles": ["researcher"],
         "clearance": "internal",
-        "department": "engineering",
+        "department": "climate_science",
     }
 
     # Vector-focused search (higher alpha means more emphasis on vector similarity)
     results = processor.search(
-        query="api authentication methods",
-        user_info=developer,
+        query="sentiment analysis of climate change denial tweets",
+        user_info=researcher,
         k=3,
         hybrid_alpha=0.8,  # Emphasize vector search over keyword search
     )
 
-    print(f"  Found {len(results)} results for developer (vector-focused search)")
+    print(f"  Found {len(results)} results for climate researcher (vector-focused search)")
     for i, doc in enumerate(results):
         print(
-            f"  {i+1}. Security: {doc.metadata.get('security_level', 'Unknown')} - "
-            f"Project: {doc.metadata.get('project', 'Unknown')}"
+            f"  {i+1}. Topic: {doc.metadata.get('topic', 'Unknown')} - "
+            f"Source: {doc.metadata.get('source', 'Unknown')}"
         )
         print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
         print(f"     {doc.page_content[:100]}...")
 
+    # Data analyst search with keyword focus
+    print("\nSearching as Data Analyst:")
+    analyst = {
+        "user_id": "data.analyst@org.com",
+        "roles": ["analyst"],
+        "clearance": "internal",
+        "department": "data_analytics",
+    }
+
     # Keyword-focused search (lower alpha means more emphasis on keyword matching)
-    print("\nPerforming keyword-focused search:")
     results = processor.search(
-        query="api authentication methods",
-        user_info=developer,
+        query="hashtag frequency climate activism twitter",
+        user_info=analyst,
         k=3,
         hybrid_alpha=0.2,  # Emphasize keyword search over vector search
     )
 
-    print(f"  Found {len(results)} results for developer (keyword-focused search)")
+    print(f"  Found {len(results)} results for data analyst (keyword-focused search)")
     for i, doc in enumerate(results):
         print(
-            f"  {i+1}. Security: {doc.metadata.get('security_level', 'Unknown')} - "
+            f"  {i+1}. Analysis Type: {doc.metadata.get('analysis_type', 'Unknown')} - "
+            f"Category: {doc.metadata.get('category', 'Unknown')}"
+        )
+        print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
+        print(f"     {doc.page_content[:100]}...")
+    
+    # Policy advisor search with balanced hybrid search
+    print("\nSearching as Policy Advisor:")
+    advisor = {
+        "user_id": "policy.advisor@gov.org",
+        "roles": ["policy_advisor"],
+        "clearance": "internal",
+        "department": "policy",
+    }
+
+    # Balanced hybrid search
+    results = processor.search(
+        query="public opinion trends on climate policy based on twitter data",
+        user_info=advisor,
+        k=3,
+        hybrid_alpha=0.5,  # Balance between vector and keyword search
+    )
+
+    print(f"  Found {len(results)} results for policy advisor (balanced hybrid search)")
+    for i, doc in enumerate(results):
+        print(
+            f"  {i+1}. Topic: {doc.metadata.get('topic', 'Unknown')} - "
             f"Project: {doc.metadata.get('project', 'Unknown')}"
         )
         print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
@@ -169,14 +144,9 @@ if __name__ == "__main__":
         print("Please set these environment variables in your .env file.")
         print("Skipping AstraDB examples...")
     else:
-        # Run OpenAI example if OpenAI API key is available
-        if os.environ.get("OPENAI_API_KEY"):
-            astra_openai_example()
-        else:
-            print("WARNING: OPENAI_API_KEY not found. Skipping OpenAI embeddings example.")
-        
         # Run Gemini example if Google API key is available
         if os.environ.get("GOOGLE_API_KEY"):
-            astra_gemini_example() 
+            astra_gemini_climate_analytics()
         else:
             print("WARNING: GOOGLE_API_KEY not found. Skipping Gemini embeddings example.")
+            print("Please set the GOOGLE_API_KEY environment variable in your .env file.")
