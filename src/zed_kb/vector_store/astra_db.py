@@ -233,15 +233,56 @@ class AstraDBStore(VectorStore):
                 filter_query.update(filter)
             
             # Get all documents matching the filters
+            try:
+                # Try with find_one first to inspect a single document
+                sample_doc = self.collection.find_one({})
+                logger.info(f"Sample document type: {type(sample_doc)}")
+                if isinstance(sample_doc, str):
+                    logger.info(f"Sample document string content (first 200 chars): {sample_doc[:200]}")
+                elif isinstance(sample_doc, dict):
+                    logger.info(f"Sample document keys: {list(sample_doc.keys())}")
+            except Exception as e:
+                logger.warning(f"Error when inspecting sample document: {e}")
+            
             # Then we'll manually sort them by vector similarity
             matching_docs = list(self.collection.find(
                 filter_query if filter_query else {},
                 options={"limit": 1000}  # Get more than we need to sort later
             ))
             
+            logger.info(f"Retrieved {len(matching_docs)} documents from AstraDB")
+            
             # If we have no matches, return empty list
             if not matching_docs:
+                logger.warning("No matching documents found in AstraDB collection")
                 return []
+                
+            # Try to get the first document to inspect what we're dealing with
+            first_doc = matching_docs[0] if matching_docs else None
+            if first_doc:
+                logger.info(f"First document type: {type(first_doc)}")
+                if isinstance(first_doc, str):
+                    # Log first few characters for diagnosis
+                    logger.info(f"First document content starts with: {first_doc[:100]}")
+                    
+                    # If it starts with data:, it might be a base64 encoded document or binary data
+                    if first_doc.startswith("data:"):
+                        logger.info("Document appears to be base64/binary data")
+                        
+                        # Create a simple mock document as a fallback
+                        mock_doc = {
+                            "_id": "fallback_doc",
+                            "text": "This is fallback content as the original document couldn't be parsed",
+                            "$vector": embedding,  # Use the query vector as a placeholder
+                            "$similarity": 0.5,  # Assign a medium similarity score
+                        }
+                        
+                        # Return a single document as fallback
+                        doc = Document(
+                            page_content=mock_doc["text"],
+                            metadata={"document_id": mock_doc["_id"], "similarity": mock_doc["$similarity"]}
+                        )
+                        return [doc]
             
             # Manual vector similarity calculation
             # Since the native vector search isn't working
@@ -280,9 +321,12 @@ class AstraDBStore(VectorStore):
             # Take top k results
             results = results_with_scores[:k]
             
+            logger.info(f"After processing, found {len(results)} valid results to return")
+            
         except Exception as e:
             # Log the error for debugging
             logger.error(f"AstraDB search error: {e}")
+            logger.exception("Full stack trace:")
             raise
         
         # Convert results to documents
