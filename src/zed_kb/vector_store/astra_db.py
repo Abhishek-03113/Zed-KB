@@ -14,10 +14,8 @@ from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
 
 try:
-    from cassandra.cluster import Cluster
-    from cassandra.auth import PlainTextAuthProvider
-    from cassandra.query import dict_factory
-    from astrapy.db import AstraDB, AstraDBCollection
+    # Updated imports for the current astrapy API (v1.5.2+)
+    from astrapy.db import AstraDB
     HAS_ASTRA = True
 except ImportError:
     HAS_ASTRA = False
@@ -36,9 +34,9 @@ class AstraDBStore(VectorStore):
         api_endpoint: Optional[str] = None,
         astra_db_id: Optional[str] = None,
         astra_db_region: Optional[str] = None,
-        astra_db_keyspace: Optional[str] = "vector_keyspace",
+        astra_db_keyspace: Optional[str] = "default_keyspace",
         namespace: Optional[str] = None,
-        hybrid_search: bool = True,
+        hybrid_search: bool = False,  # Changed default to False
         index_config: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -59,7 +57,7 @@ class AstraDBStore(VectorStore):
         if not HAS_ASTRA:
             raise ImportError(
                 "Could not import astrapy package. "
-                "Please install it with `pip install astrapy cassandra-driver`."
+                "Please install it with `pip install astrapy`."
             )
 
         self.embedding_function = embedding_function
@@ -77,57 +75,37 @@ class AstraDBStore(VectorStore):
         # API endpoint takes precedence over database ID and region
         if api_endpoint:
             self.api_endpoint = api_endpoint
-            self.astra_db = AstraDB(token=self.token, api_endpoint=api_endpoint)
         elif astra_db_id and astra_db_region:
             self.api_endpoint = f"https://{astra_db_id}-{astra_db_region}.apps.astra.datastax.com"
-            self.astra_db = AstraDB(
-                token=self.token,
-                api_endpoint=self.api_endpoint,
-            )
         else:
             raise ValueError(
                 "Either api_endpoint or both astra_db_id and astra_db_region must be provided."
             )
 
-        # Get or create collection
-        self.namespace = namespace
+        # Initialize the AstraDB client
+        self.astra_db = AstraDB(
+            api_endpoint=self.api_endpoint,
+            token=self.token,
+            namespace=namespace,
+        )
         
         # Configure the vector dimension based on the embedding function
-        # Use a simple text to get the vector dimension
         sample_vector = embedding_function.embed_query("Sample text to determine vector dimension")
         vector_dimension = len(sample_vector)
         
-        # Default index configuration if not provided
-        if not index_config:
-            index_config = {
-                "vector": {
-                    "dimensions": vector_dimension,
-                    "metric": "cosine",
-                }
-            }
-            
-            # Add text index configuration if hybrid search is enabled
-            if self.hybrid_search:
-                index_config["text"] = {
-                    "analyzer": "en.english",
-                }
-        
+        # Create collection or use existing one
         try:
-            # Try to get the collection, create it if it doesn't exist
-            if namespace:
-                self.collection = self.astra_db.create_collection(
-                    collection_name=self.collection_name,
-                    dimension=vector_dimension,
-                    namespace=namespace,
-                    options={"indexConfig": index_config}
-                )
-            else:
-                self.collection = self.astra_db.create_collection(
-                    collection_name=self.collection_name,
-                    dimension=vector_dimension,
-                    options={"indexConfig": index_config}
-                )
-                
+            # Create the collection if it doesn't exist
+            collection_info = self.astra_db.create_collection(
+                collection_name=self.collection_name,
+                dimension=vector_dimension,
+                # Enable hybrid search if requested
+                options={"indexing": {"allow": ["text"]}} if self.hybrid_search else None
+            )
+            
+            # Get the collection
+            self.collection = self.astra_db.collection(self.collection_name)
+            
             logger.info(f"Connected to AstraDB collection: {self.collection_name}")
         except Exception as e:
             raise ConnectionError(f"Error connecting to AstraDB: {e}")
@@ -152,7 +130,7 @@ class AstraDBStore(VectorStore):
         """
         # Generate embeddings for the texts
         embeddings = self.embedding_function.embed_documents(texts)
-        
+
         # Generate IDs if not provided
         if not ids:
             ids = [str(uuid.uuid4()) for _ in texts]
@@ -174,9 +152,10 @@ class AstraDBStore(VectorStore):
             documents.append(doc)
 
         # Insert documents in batches to handle potential API limits
-        batch_size = 100  # Adjust based on AstraDB's limits
+        batch_size = 20  # Adjust based on AstraDB's limits
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i+batch_size]
+            # Use insert_many with the updated API
             self.collection.insert_many(batch)
 
         return ids
@@ -240,48 +219,103 @@ class AstraDBStore(VectorStore):
         Returns:
             List of documents most similar to the embedding
         """
-        search_query = {"$vector": embedding}
-        
-        # Add hybrid search if enabled and query text is provided
-        if self.hybrid_search and query_text:
-            search_query["text"] = {"$contains": query_text}
-            if "hybrid_alpha" in kwargs:
-                # The ratio between vector and text search in hybrid searches (0.0 to 1.0)
-                # 0 means only text search, 1 means only vector search
-                search_query["$options"] = {"hybridSearch": {"alpha": kwargs["hybrid_alpha"]}}
+        try:
+            # For newer AstraDB API versions, we need a different approach to vector search
+            # First, get all documents that match the metadata filters and text query
+            filter_query = {}
+            
+            # Add text search condition if hybrid search is enabled
+            if self.hybrid_search and query_text:
+                filter_query["text"] = {"$contains": query_text}
                 
-        # Add filter if provided
-        if filter:
-            for key, value in filter.items():
-                search_query[key] = value
-
-        # Execute the search
-        results = self.collection.vector_find(
-            search_query,
-            limit=k,
-            include_similarity=True,
-            fields=["text", "*"],  # Include all fields
-        )
-
+            # Add additional metadata filters if provided
+            if filter:
+                filter_query.update(filter)
+            
+            # Get all documents matching the filters
+            # Then we'll manually sort them by vector similarity
+            matching_docs = list(self.collection.find(
+                filter_query if filter_query else {},
+                options={"limit": 1000}  # Get more than we need to sort later
+            ))
+            
+            # If we have no matches, return empty list
+            if not matching_docs:
+                return []
+            
+            # Manual vector similarity calculation
+            # Since the native vector search isn't working
+            results_with_scores = []
+            for doc in matching_docs:
+                # Handle string documents by trying to parse them as JSON
+                if isinstance(doc, str):
+                    try:
+                        import json
+                        # Try to parse as JSON if it's a string
+                        doc = json.loads(doc)
+                        logger.info(f"Successfully parsed string document as JSON")
+                    except json.JSONDecodeError:
+                        logger.warning(f"Document is a string and couldn't be parsed as JSON: {doc[:100]}...")
+                        continue
+                
+                # Skip if doc is still not a dictionary or doesn't have vector embeddings
+                if not isinstance(doc, dict) or "$vector" not in doc:
+                    if isinstance(doc, dict):
+                        logger.warning(f"Document {doc.get('_id', 'unknown')} is missing vector embedding")
+                    else:
+                        logger.warning(f"Document is neither a string nor a dictionary: {type(doc)}")
+                    continue
+                    
+                # Calculate cosine similarity
+                doc_vector = doc["$vector"]
+                score = self._cosine_similarity(embedding, doc_vector)
+                
+                # Add score to document
+                doc["$similarity"] = score
+                results_with_scores.append(doc)
+            
+            # Sort by similarity (highest first)
+            results_with_scores.sort(key=lambda x: x.get("$similarity", 0), reverse=True)
+            
+            # Take top k results
+            results = results_with_scores[:k]
+            
+        except Exception as e:
+            # Log the error for debugging
+            logger.error(f"AstraDB search error: {e}")
+            raise
+        
         # Convert results to documents
         documents = []
         for item in results:
-            # Extract metadata (all keys except _id, text, $vector, and $similarity)
+            # Extract metadata (all keys except specific ones)
             metadata = {
-                k: v for k, v in item.items() 
+                k: v for k, v in item.items()
                 if k not in ["_id", "text", "$vector", "$similarity"]
             }
             
             # Add document ID and similarity score to metadata
-            metadata["document_id"] = item["_id"]
+            metadata["document_id"] = item.get("_id", "unknown")
             if "$similarity" in item:
                 metadata["similarity"] = item["$similarity"]
-                
-            # Create document
-            doc = Document(page_content=item["text"], metadata=metadata)
+            
+            # Create document with text content and metadata
+            doc = Document(page_content=item.get("text", ""), metadata=metadata)
             documents.append(doc)
-
+            
         return documents
+            
+    def _cosine_similarity(self, vec1, vec2):
+        """Calculate cosine similarity between two vectors"""
+        import numpy as np
+        v1 = np.array(vec1)
+        v2 = np.array(vec2)
+        
+        # Handle zero vectors
+        if np.all(v1 == 0) or np.all(v2 == 0):
+            return 0.0
+            
+        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
     def delete(self, ids: List[str], **kwargs: Any) -> Optional[bool]:
         """
@@ -294,7 +328,7 @@ class AstraDBStore(VectorStore):
             Success flag
         """
         for doc_id in ids:
-            self.collection.delete_one({"_id": doc_id})
+            self.collection.delete({"_id": doc_id})
         return True
 
     @classmethod
@@ -318,12 +352,17 @@ class AstraDBStore(VectorStore):
         Returns:
             AstraDB vector store containing the documents
         """
+        # First initialize the vector store
         astra_store = cls(
             embedding_function=embedding,
             collection_name=collection_name,
             **kwargs,
         )
-        astra_store.add_documents(documents=documents, ids=ids)
+        
+        # Only add documents if there are any
+        if documents:
+            astra_store.add_documents(documents=documents, ids=ids)
+            
         return astra_store
 
     @classmethod

@@ -1,7 +1,7 @@
 """
-Example script demonstrating AstraDB Vector Store with hybrid search capabilities.
+Example script demonstrating AstraDB Vector Store with cosine similarity search.
 This example shows how to use Gemini embeddings with AstraDB vector database for
-analyzing Twitter data related to climate change.
+analyzing Twitter data related to climate change using pure vector search.
 """
 
 import os
@@ -18,16 +18,16 @@ dotenv.load_dotenv()
 from src.zed_kb.document_processing import DocumentProcessor
 
 
-def astra_gemini_climate_analytics():
-    """Example using AstraDB with Gemini embeddings for Twitter climate change analytics"""
+def astra_gemini_cosine_search():
+    """Example using AstraDB with Gemini embeddings for Twitter climate change analytics using cosine search"""
     
-    print("\n*** AstraDB with Gemini Embeddings for Twitter Climate Analytics Example ***\n")
+    print("\n*** AstraDB with Gemini Embeddings using Cosine Similarity Search Example ***\n")
     
     # Configure AstraDB connection
     astra_config = {
         "token": os.environ.get("ASTRA_DB_APPLICATION_TOKEN"),
         "api_endpoint": os.environ.get("ASTRA_DB_API_ENDPOINT"),
-        "collection_name": "twitter_climate_analytics"
+        "collection_name": "twitter_climate_cosine_search"
     }
 
     # Set up document processor with AstraDB and Google Gemini embeddings
@@ -35,7 +35,7 @@ def astra_gemini_climate_analytics():
         vector_store_type="astradb",
         embedding_provider="gemini",  # Using Google Gemini embeddings
         embedding_model="models/embedding-001",
-        hybrid_search=True,  # Enable hybrid search
+        hybrid_search=False,  # Disable hybrid search - use pure cosine similarity
         astra_config=astra_config,
     )
     
@@ -63,7 +63,7 @@ def astra_gemini_climate_analytics():
     # Different user roles searching for climate data
     
     # Climate researcher search
-    print("\nSearching as Climate Researcher:")
+    print("\nSearching as Climate Researcher (pure vector search):")
     researcher = {
         "user_id": "climate.researcher@org.com",
         "roles": ["researcher"],
@@ -71,15 +71,13 @@ def astra_gemini_climate_analytics():
         "department": "climate_science",
     }
 
-    # Vector-focused search (higher alpha means more emphasis on vector similarity)
     results = processor.search(
         query="sentiment analysis of climate change denial tweets",
         user_info=researcher,
         k=3,
-        hybrid_alpha=0.8,  # Emphasize vector search over keyword search
     )
 
-    print(f"  Found {len(results)} results for climate researcher (vector-focused search)")
+    print(f"  Found {len(results)} results for climate researcher")
     for i, doc in enumerate(results):
         print(
             f"  {i+1}. Topic: {doc.metadata.get('topic', 'Unknown')} - "
@@ -88,8 +86,8 @@ def astra_gemini_climate_analytics():
         print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
         print(f"     {doc.page_content[:100]}...")
 
-    # Data analyst search with keyword focus
-    print("\nSearching as Data Analyst:")
+    # Data analyst search
+    print("\nSearching as Data Analyst (pure vector search):")
     analyst = {
         "user_id": "data.analyst@org.com",
         "roles": ["analyst"],
@@ -97,15 +95,13 @@ def astra_gemini_climate_analytics():
         "department": "data_analytics",
     }
 
-    # Keyword-focused search (lower alpha means more emphasis on keyword matching)
     results = processor.search(
         query="hashtag frequency climate activism twitter",
         user_info=analyst,
         k=3,
-        hybrid_alpha=0.2,  # Emphasize keyword search over vector search
     )
 
-    print(f"  Found {len(results)} results for data analyst (keyword-focused search)")
+    print(f"  Found {len(results)} results for data analyst")
     for i, doc in enumerate(results):
         print(
             f"  {i+1}. Analysis Type: {doc.metadata.get('analysis_type', 'Unknown')} - "
@@ -114,8 +110,8 @@ def astra_gemini_climate_analytics():
         print(f"     Similarity: {doc.metadata.get('similarity', 'Unknown')}")
         print(f"     {doc.page_content[:100]}...")
     
-    # Policy advisor search with balanced hybrid search
-    print("\nSearching as Policy Advisor:")
+    # Policy advisor search
+    print("\nSearching as Policy Advisor (pure vector search):")
     advisor = {
         "user_id": "policy.advisor@gov.org",
         "roles": ["policy_advisor"],
@@ -123,15 +119,13 @@ def astra_gemini_climate_analytics():
         "department": "policy",
     }
 
-    # Balanced hybrid search
     results = processor.search(
         query="public opinion trends on climate policy based on twitter data",
         user_info=advisor,
         k=3,
-        hybrid_alpha=0.5,  # Balance between vector and keyword search
     )
 
-    print(f"  Found {len(results)} results for policy advisor (balanced hybrid search)")
+    print(f"  Found {len(results)} results for policy advisor")
     for i, doc in enumerate(results):
         print(
             f"  {i+1}. Topic: {doc.metadata.get('topic', 'Unknown')} - "
@@ -150,7 +144,7 @@ if __name__ == "__main__":
     else:
         # Run Gemini example if Google API key is available
         if os.environ.get("GOOGLE_API_KEY"):
-            astra_gemini_climate_analytics()
+            astra_gemini_cosine_search()
         else:
             print("WARNING: GOOGLE_API_KEY not found. Skipping Gemini embeddings example.")
             print("Please set the GOOGLE_API_KEY environment variable in your .env file.")
