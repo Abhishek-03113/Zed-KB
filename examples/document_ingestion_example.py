@@ -20,8 +20,8 @@ def main():
     # Set up the document processor
     processor = DocumentProcessor(
         vector_store_type="faiss",
-        embedding_provider="openai",  # Requires OPENAI_API_KEY in .env
-        embedding_model="text-embedding-ada-002",
+        embedding_provider="gemini",  # Using Google Gemini embeddings
+        embedding_model="models/embedding-001",
         persist_directory="./data/vector_store",
         chunk_size=1000,
         chunk_overlap=200,
@@ -33,7 +33,7 @@ def main():
     # Process a public document
     print("Processing public document...")
     doc_ids = processor.process_file(
-        file_path="./data/documents/public/company_overview.pdf",
+        file_path="./data/test.pdf",
         metadata={"category": "company", "topic": "overview"},
         security_level="public",
         allowed_roles=["employee", "contractor", "customer"],

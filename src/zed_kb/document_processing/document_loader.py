@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 import os
 from pathlib import Path
 
-from langchain.document_loaders import (
+from langchain_community.document_loaders import (
     PyMuPDFLoader,
     UnstructuredWordDocumentLoader,
     UnstructuredHTMLLoader,

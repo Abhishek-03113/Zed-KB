@@ -13,6 +13,7 @@ from langchain.schema import Document
 from langchain.vectorstores import FAISS, Chroma
 from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 from langchain.embeddings.base import Embeddings
+from ..vector_store.gemini_embeddings import GeminiEmbeddings
 
 
 class DocumentIndexer:
@@ -26,6 +27,10 @@ class DocumentIndexer:
         ),
         "huggingface": lambda **kwargs: HuggingFaceEmbeddings(
             model_name=kwargs.get("model", "all-MiniLM-L6-v2")
+        ),
+        "gemini": lambda **kwargs: GeminiEmbeddings(
+            model=kwargs.get("model", "embedding-001"),
+            task_type=kwargs.get("task_type", "RETRIEVAL_DOCUMENT")
         ),
     }
 
