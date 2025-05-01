@@ -2,6 +2,7 @@
 Example script demonstrating the document processing pipeline.
 """
 
+from src.zed_kb.document_processing import DocumentProcessor
 import os
 import sys
 import dotenv
@@ -12,8 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Load environment variables from .env
 dotenv.load_dotenv()
-
-from src.zed_kb.document_processing import DocumentProcessor
 
 
 def main():
@@ -73,7 +72,8 @@ def main():
         "department": "marketing",
     }
 
-    results = processor.search(query="company policies", user_info=regular_user, k=3)
+    results = processor.search(
+        query="company policies", user_info=regular_user, k=3)
 
     print(f"  Found {len(results)} results for regular employee")
     for i, doc in enumerate(results):
@@ -91,7 +91,8 @@ def main():
         "department": "hr",
     }
 
-    results = processor.search(query="company policies", user_info=hr_manager, k=3)
+    results = processor.search(
+        query="company policies", user_info=hr_manager, k=3)
 
     print(f"  Found {len(results)} results for HR manager")
     for i, doc in enumerate(results):
@@ -109,7 +110,8 @@ def main():
         "department": "finance",
     }
 
-    results = processor.search(query="financial forecast", user_info=executive, k=3)
+    results = processor.search(
+        query="financial forecast", user_info=executive, k=3)
 
     print(f"  Found {len(results)} results for executive")
     for i, doc in enumerate(results):

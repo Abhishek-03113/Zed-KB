@@ -220,7 +220,8 @@ class DocumentIndexer:
                 results = self.vector_store.similarity_search(
                     query, k=k * 5
                 )  # Get more to filter down
-                filtered_results = [doc for doc in results if filter_fn(doc.metadata)]
+                filtered_results = [
+                    doc for doc in results if filter_fn(doc.metadata)]
                 return filtered_results[:k]
 
             # For Chroma, we can use the filter argument
@@ -230,7 +231,8 @@ class DocumentIndexer:
                 if user_dept and not metadata_filter:
                     metadata_filter = {"department": user_dept}
                 elif user_dept and metadata_filter:
-                    metadata_filter = {**metadata_filter, "department": user_dept}
+                    metadata_filter = {
+                        **metadata_filter, "department": user_dept}
 
         # Perform the search
         results = self.vector_store.similarity_search(
@@ -310,7 +312,8 @@ class DocumentIndexer:
         """
         try:
             if self.vector_store_type == "faiss":
-                self.vector_store = FAISS.load_local(file_path, self.embedding_model)
+                self.vector_store = FAISS.load_local(
+                    file_path, self.embedding_model)
                 return True
             elif self.vector_store_type == "chroma" and os.path.exists(
                 self.persist_directory

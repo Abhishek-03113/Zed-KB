@@ -2,7 +2,6 @@
 Metadata extractor module for Zed-KB.
 Enhances document metadata by extracting useful information.
 """
-
 from typing import List, Dict, Any, Optional
 import re
 import datetime
@@ -36,15 +35,18 @@ class MetadataExtractor:
         )
 
         # Add timestamp metadata
-        enhanced_doc.metadata["processed_at"] = datetime.datetime.now().isoformat()
+        enhanced_doc.metadata["processed_at"] = datetime.datetime.now(
+        ).isoformat()
 
         # Extract content-based metadata
-        content_metadata = self._extract_content_metadata(enhanced_doc.page_content)
+        content_metadata = self._extract_content_metadata(
+            enhanced_doc.page_content)
         enhanced_doc.metadata.update(content_metadata)
 
         # Extract path-based metadata
         if "source" in enhanced_doc.metadata:
-            path_metadata = self._extract_path_metadata(enhanced_doc.metadata["source"])
+            path_metadata = self._extract_path_metadata(
+                enhanced_doc.metadata["source"])
             enhanced_doc.metadata.update(path_metadata)
 
         return enhanced_doc
@@ -87,6 +89,7 @@ class MetadataExtractor:
 
         elif re.search(r"(report|analysis|study|research)", content, re.IGNORECASE):
             metadata["content_type"] = "report"
+            metadata["sensitivity"] = "medium"
 
         elif re.search(r"(manual|guide|instruction|how\sto)", content, re.IGNORECASE):
             metadata["content_type"] = "manual"
@@ -96,7 +99,8 @@ class MetadataExtractor:
         date_pattern = r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})"
         dates = re.findall(date_pattern, content)
         if dates:
-            metadata["extracted_dates"] = dates[:5]  # Take only the first 5 dates
+            # Take only the first 5 dates
+            metadata["extracted_dates"] = dates[:5]
 
         return metadata
 
