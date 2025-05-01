@@ -1,8 +1,7 @@
 """
-Example script demonstrating the document processing pipeline.
+Example script demonstrating document processing pipeline for climate change Twitter data analytics.
 """
 
-from src.zed_kb.document_processing import DocumentProcessor
 import os
 import sys
 import dotenv
@@ -10,6 +9,8 @@ from pathlib import Path
 
 # Add the parent directory to the path so we can import zed_kb
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.zed_kb.document_processing import DocumentProcessor
 
 # Load environment variables from .env
 dotenv.load_dotenv()
@@ -26,97 +27,81 @@ def main():
         chunk_overlap=200,
     )
 
-    # Example document processing with different security levels and access controls
-    print("\n*** Processing Documents with Security Controls ***\n")
+    # Process the Twitter data analytics document for climate change
+    print("\n*** Processing Twitter Data Analytics for Climate Change ***\n")
 
-    # Process a public document
-    print("Processing public document...")
+    # Process the climate change Twitter data report
+    print("Processing Twitter data analytics report...")
     doc_ids = processor.process_file(
         file_path="./data/test.pdf",
-        metadata={"category": "company", "topic": "overview"},
-        security_level="public",
-        allowed_roles=["employee", "contractor", "customer"],
+        metadata={
+            "category": "social_media_analytics", 
+            "topic": "climate_change", 
+            "source": "twitter",
+            "analysis_type": "sentiment_analysis"
+        },
+        security_level="internal",
+        allowed_roles=["researcher", "analyst", "data_scientist"],
     )
     print(f"  Processed document IDs: {doc_ids}")
 
-    # Process a confidential HR document
-    print("\nProcessing confidential HR document...")
-    doc_ids = processor.process_file(
-        file_path="./data/documents/hr/employee_handbook.pdf",
-        metadata={"category": "hr", "topic": "policies"},
-        security_level="confidential",
-        allowed_roles=["hr", "manager", "executive"],
-    )
-    print(f"  Processed document IDs: {doc_ids}")
+    # Example searching the Twitter climate change data with different queries
+    print("\n*** Searching Twitter Climate Change Data ***\n")
 
-    # Process a restricted financial document
-    print("\nProcessing restricted financial document...")
-    doc_ids = processor.process_file(
-        file_path="./data/documents/finance/q2_forecast.pdf",
-        metadata={"category": "finance", "topic": "forecast", "quarter": "Q2"},
-        security_level="restricted",
-        allowed_roles=["finance", "executive"],
-        allowed_users=["john.cfo@company.com"],
-    )
-    print(f"  Processed document IDs: {doc_ids}")
-
-    # Example searching with different user permissions
-    print("\n*** Searching Documents with Different User Permissions ***\n")
-
-    # Regular employee search
-    print("Regular employee search:")
-    regular_user = {
-        "user_id": "jane.employee@company.com",
-        "roles": ["employee"],
+    # Climate researcher search
+    print("Climate researcher search:")
+    researcher = {
+        "user_id": "climate.researcher@org.com",
+        "roles": ["researcher"],
         "clearance": "internal",
-        "department": "marketing",
+        "department": "climate_science",
     }
 
     results = processor.search(
-        query="company policies", user_info=regular_user, k=3)
+        query="climate change sentiment trends", user_info=researcher, k=3)
 
-    print(f"  Found {len(results)} results for regular employee")
+    print(f"  Found {len(results)} results for climate researcher")
     for i, doc in enumerate(results):
         print(
-            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Security: {doc.metadata.get('security_level', 'Unknown')}"
+            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Topic: {doc.metadata.get('topic', 'Unknown')}"
         )
         print(f"     {doc.page_content[:100]}...")
 
-    # HR manager search
-    print("\nHR manager search:")
-    hr_manager = {
-        "user_id": "hr.manager@company.com",
-        "roles": ["hr", "manager"],
-        "clearance": "confidential",
-        "department": "hr",
+    # Data analyst search
+    print("\nData analyst search:")
+    analyst = {
+        "user_id": "data.analyst@org.com",
+        "roles": ["analyst"],
+        "clearance": "internal",
+        "department": "data_analytics",
     }
 
     results = processor.search(
-        query="company policies", user_info=hr_manager, k=3)
+        query="twitter hashtag frequency climate", user_info=analyst, k=3)
 
-    print(f"  Found {len(results)} results for HR manager")
+    print(f"  Found {len(results)} results for data analyst")
     for i, doc in enumerate(results):
         print(
-            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Security: {doc.metadata.get('security_level', 'Unknown')}"
+            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Analysis: {doc.metadata.get('analysis_type', 'Unknown')}"
         )
         print(f"     {doc.page_content[:100]}...")
 
-    # Executive search
-    print("\nExecutive search:")
-    executive = {
-        "user_id": "john.cfo@company.com",
-        "roles": ["finance", "executive"],
-        "clearance": "restricted",
-        "department": "finance",
+    # Policy advisor search
+    print("\nPolicy advisor search:")
+    advisor = {
+        "user_id": "policy.advisor@gov.org",
+        "roles": ["researcher", "analyst"],
+        "clearance": "internal",
+        "department": "policy",
     }
 
     results = processor.search(
-        query="financial forecast", user_info=executive, k=3)
+        query="public opinion climate policy", user_info=advisor, k=3)
 
-    print(f"  Found {len(results)} results for executive")
+    print(f"  Found {len(results)} results for policy advisor")
     for i, doc in enumerate(results):
         print(
-            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Security: {doc.metadata.get('security_level', 'Unknown')}"
+            f"  {i+1}. {doc.metadata.get('source', 'Unknown')} - Topic: {doc.metadata.get('topic', 'Unknown')}"
         )
         print(f"     {doc.page_content[:100]}...")
 
