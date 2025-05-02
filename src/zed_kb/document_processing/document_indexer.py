@@ -202,6 +202,7 @@ class DocumentIndexer:
                 "internal": 1,
                 "confidential": 2,
                 "restricted": 3,
+                "top_secret": 4
             }
 
             if clearance_levels.get(user_clearance, -1) >= clearance_levels.get(
@@ -241,44 +242,56 @@ class DocumentIndexer:
         # Create metadata filter
         metadata_filter = filter_metadata or {}
 
-        # Apply security filtering if user info is provided
+        # Apply security filtering for different vector stores
         if user_info:
+            # For AstraDB, use the specialized security-aware search method
+            if self.vector_store_type == "astradb" and hasattr(self.vector_store, "similarity_search_with_security"):
+                # Use the enhanced security-aware search if available
+                return self.vector_store.similarity_search_with_security(
+                    query=query,
+                    user_info=user_info,
+                    k=k,
+                    filter=metadata_filter,
+                    hybrid_alpha=hybrid_alpha if self.hybrid_search else None
+                )
+            
+            # For other vector stores, use the traditional approach
             filter_fn = self._create_metadata_filter(user_info)
 
-            # Get all relevant documents and filter manually
-            # This is a simple approach for FAISS which doesn't support filter functions
+            # For FAISS which doesn't support metadata filtering directly
             if self.vector_store_type == "faiss":
                 results = self.vector_store.similarity_search(
                     query, k=k * 5
-                )  # Get more to filter down
+                )  # Get more results to filter down
                 filtered_results = [doc for doc in results if filter_fn(doc.metadata)]
                 return filtered_results[:k]
 
-            # Add role-based access control metadata to filter
-            if user_info.get("roles"):
-                metadata_filter["allowed_roles"] = {"$in": user_info["roles"]}
-                
-            # Add clearance level filtering
-            if user_info.get("clearance"):
-                user_clearance = user_info["clearance"]
-                # Convert to numeric levels for comparison
-                clearance_levels = {
-                    "public": 0,
-                    "internal": 1,
-                    "confidential": 2,
-                    "restricted": 3,
-                }
-                user_clearance_level = clearance_levels.get(user_clearance, 0)
-                
-                # Filter to only include documents with equal or lower security level
-                # This is a simplified approach - different vector stores may require different implementations
-                if self.vector_store_type == "astradb":
-                    # For AstraDB, we'll use a direct comparison if possible
+            # For other vector stores with metadata filtering
+            else:
+                # Add role-based access control metadata to filter
+                if user_info.get("roles"):
+                    metadata_filter["allowed_roles"] = {"$in": user_info["roles"]}
+                    
+                # Add clearance level filtering
+                if user_info.get("clearance"):
+                    user_clearance = user_info["clearance"]
+                    # Convert to numeric levels for comparison
+                    clearance_levels = {
+                        "public": 0,
+                        "internal": 1,
+                        "confidential": 2,
+                        "restricted": 3,
+                        "top_secret": 4
+                    }
+                    user_clearance_level = clearance_levels.get(user_clearance, 0)
+                    
+                    # Filter to only include documents with equal or lower security level
                     eligible_levels = [k for k, v in clearance_levels.items() if v <= user_clearance_level]
                     metadata_filter["security_level"] = {"$in": eligible_levels}
 
-        # Perform the search with hybrid capabilities for AstraDB
-        if self.vector_store_type == "astradb" and self.hybrid_search:
+        # For standard vector search or for vector stores that don't have specialized security search
+        if self.vector_store_type == "astradb" and self.hybrid_search and hasattr(self.vector_store, "similarity_search"):
+            # Use hybrid search for AstraDB if available
             results = self.vector_store.similarity_search(
                 query, k=k, filter=metadata_filter, hybrid_alpha=hybrid_alpha
             )

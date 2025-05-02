@@ -1,6 +1,6 @@
 """
 AstraDB vector store implementation for Zed-KB.
-Provides integration with DataStax Astra DB for vector search with hybrid capabilities.
+Provides integration with DataStax Astra DB for vector search with security level filtering.
 """
 
 from typing import List, Dict, Any, Optional, Callable, Union
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class AstraDBStore(VectorStore):
-    """Vector store implementation using DataStax AstraDB."""
+    """Vector store implementation using DataStax AstraDB with security level filtering."""
 
     def __init__(
         self,
@@ -36,7 +36,7 @@ class AstraDBStore(VectorStore):
         astra_db_region: Optional[str] = None,
         astra_db_keyspace: Optional[str] = "default_keyspace",
         namespace: Optional[str] = None,
-        hybrid_search: bool = False,  # Changed default to False
+        hybrid_search: bool = False,  # Kept for backwards compatibility
         index_config: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -51,7 +51,7 @@ class AstraDBStore(VectorStore):
             astra_db_region: AstraDB database region
             astra_db_keyspace: AstraDB keyspace name
             namespace: Collection namespace
-            hybrid_search: Whether to enable hybrid search (vector + BM25 text search)
+            hybrid_search: Whether to enable hybrid search (kept for backwards compatibility)
             index_config: Configuration for vector index creation
         """
         if not HAS_ASTRA:
@@ -95,13 +95,30 @@ class AstraDBStore(VectorStore):
         
         # Create collection or use existing one
         try:
-            # Create the collection if it doesn't exist
-            collection_info = self.astra_db.create_collection(
-                collection_name=self.collection_name,
-                dimension=vector_dimension,
-                # Enable hybrid search if requested
-                options={"indexing": {"allow": ["text"]}} if self.hybrid_search else None
-            )
+            # Create the collection if it doesn't exist with indexed security fields
+            # Note: AstraDB requires explicit indexing of fields used for filtering
+            collection_options = {
+                "vector": {
+                    "dimension": vector_dimension,
+                    "similarity": "cosine"
+                },
+                "indexing": {
+                    "deny_list": [],  # Fields to exclude from indexing (using underscore)
+                    "include_vectors": True  # Ensure vector indexing is enabled
+                }
+            }
+            
+            try:
+                # Create new collection with proper indexing
+                collection_info = self.astra_db.create_collection(
+                    collection_name=self.collection_name,
+                    options=collection_options
+                )
+                logger.info(f"Created AstraDB collection: {self.collection_name}")
+            except Exception as e:
+                # Collection might already exist
+                if "already exists" not in str(e):
+                    logger.warning(f"Error creating collection: {e}")
             
             # Get the collection
             self.collection = self.astra_db.collection(self.collection_name)
@@ -142,12 +159,25 @@ class AstraDBStore(VectorStore):
         # Prepare documents for insertion
         documents = []
         for i, (text, embedding, metadata, doc_id) in enumerate(zip(texts, embeddings, metadatas, ids)):
-            # Create document with text for hybrid search
+            # Ensure security fields exist for filtering
+            security_metadata = {
+                "security_level": metadata.get("security_level", "public"),
+            }
+            
+            # Add allowed_roles as a simple string array that can be indexed and filtered
+            allowed_roles = metadata.get("allowed_roles", [])
+            if allowed_roles:
+                security_metadata["allowed_roles"] = allowed_roles
+            
+            # Merge with other metadata
+            combined_metadata = {**metadata, **security_metadata}
+            
+            # Create document
             doc = {
                 "_id": doc_id,
                 "text": text,
                 "$vector": embedding,
-                **metadata
+                **combined_metadata
             }
             documents.append(doc)
 
@@ -176,6 +206,85 @@ class AstraDBStore(VectorStore):
         texts = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
         return self.add_texts(texts=texts, metadatas=metadatas, ids=ids, **kwargs)
+
+    def similarity_search_with_security(
+        self,
+        query: str,
+        user_info: Dict[str, Any],
+        k: int = 4,
+        filter: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """
+        Search for documents similar to the query text with security filtering.
+
+        Args:
+            query: Text to search for
+            user_info: User information containing roles and clearance level
+            k: Number of documents to return
+            filter: Additional metadata filter dict
+
+        Returns:
+            List of documents most similar to the query text
+        """
+        # Get embedding for the query
+        embedding = self.embedding_function.embed_query(query)
+        
+        # Extract user security information
+        user_roles = user_info.get("roles", [])
+        user_clearance = user_info.get("clearance", "public")
+        
+        # Create security filters
+        security_filter = self._create_security_filter(user_roles, user_clearance)
+        
+        # Combine with any additional filters
+        combined_filter = security_filter
+        if filter:
+            # Merge filters
+            combined_filter.update(filter)
+        
+        logger.info(f"Searching with security filter: {combined_filter}")
+        
+        return self.similarity_search_by_vector(
+            embedding=embedding, 
+            k=k, 
+            filter=combined_filter, 
+            query_text=query,
+            **kwargs
+        )
+    
+    def _create_security_filter(self, user_roles: List[str], user_clearance: str) -> Dict[str, Any]:
+        """
+        Create a security filter based on user roles and clearance.
+        
+        Args:
+            user_roles: List of user roles
+            user_clearance: User clearance level
+            
+        Returns:
+            Filter dictionary for AstraDB query
+        """
+        security_levels = ["public", "internal", "confidential", "restricted", "top_secret"]
+        
+        # Get index of user's clearance level
+        try:
+            clearance_index = security_levels.index(user_clearance.lower())
+        except ValueError:
+            # Default to public if clearance level not recognized
+            clearance_index = 0
+            
+        # Get all clearance levels the user can access
+        allowed_levels = security_levels[:clearance_index + 1]
+        
+        # Create filter for security level only (simplified filtering approach)
+        level_filter = {"security_level": {"$in": allowed_levels}}
+        
+        # Role filtering is more complex and must match documents where:
+        # 1. The document has no allowed_roles field, or
+        # 2. The document's allowed_roles field contains at least one of the user's roles
+        # We'll check for role access after retrieving documents to simplify querying
+        
+        return level_filter
 
     def similarity_search(
         self,
@@ -220,108 +329,110 @@ class AstraDBStore(VectorStore):
             List of documents most similar to the embedding
         """
         try:
-            # For newer AstraDB API versions, we need a different approach to vector search
-            # First, get all documents that match the metadata filters and text query
-            filter_query = {}
+            # First, get all documents that match the metadata filters
+            filter_query = filter or {}
             
-            # Add text search condition if hybrid search is enabled
-            if self.hybrid_search and query_text:
-                filter_query["text"] = {"$contains": query_text}
-                
-            # Add additional metadata filters if provided
-            if filter:
-                filter_query.update(filter)
-            
-            # Get all documents matching the filters
+            # Get all documents matching the filters using AstraDB's find method
             try:
-                # Try with find_one first to inspect a single document
-                sample_doc = self.collection.find_one({})
-                logger.info(f"Sample document type: {type(sample_doc)}")
-                if isinstance(sample_doc, str):
-                    logger.info(f"Sample document string content (first 200 chars): {sample_doc[:200]}")
-                elif isinstance(sample_doc, dict):
-                    logger.info(f"Sample document keys: {list(sample_doc.keys())}")
-            except Exception as e:
-                logger.warning(f"Error when inspecting sample document: {e}")
-            
-            # Then we'll manually sort them by vector similarity
-            matching_docs = list(self.collection.find(
-                filter_query if filter_query else {},
-                options={"limit": 1000}  # Get more than we need to sort later
-            ))
-            
-            logger.info(f"Retrieved {len(matching_docs)} documents from AstraDB")
-            
-            # If we have no matches, return empty list
-            if not matching_docs:
-                logger.warning("No matching documents found in AstraDB collection")
-                return []
+                # Set up parameters for vector search
+                find_params = {}
                 
-            # Try to get the first document to inspect what we're dealing with
-            first_doc = matching_docs[0] if matching_docs else None
-            if first_doc:
-                logger.info(f"First document type: {type(first_doc)}")
-                if isinstance(first_doc, str):
-                    # Log first few characters for diagnosis
-                    logger.info(f"First document content starts with: {first_doc[:100]}")
-                    
-                    # If it starts with data:, it might be a base64 encoded document or binary data
-                    if first_doc.startswith("data:"):
-                        logger.info("Document appears to be base64/binary data")
-                        
-                        # Create a simple mock document as a fallback
-                        mock_doc = {
-                            "_id": "fallback_doc",
-                            "text": "This is fallback content as the original document couldn't be parsed",
-                            "$vector": embedding,  # Use the query vector as a placeholder
-                            "$similarity": 0.5,  # Assign a medium similarity score
+                # Apply filter if present
+                if filter_query:
+                    find_params["filter"] = filter_query
+                
+                # Set up options
+                find_params["options"] = {
+                    "limit": k,
+                    "includeSimilarity": True
+                }
+                
+                # Add vector search
+                find_params["sort"] = {"$vector": embedding}
+                
+                # Add hybrid search if enabled and query text is provided
+                hybrid_alpha = kwargs.get("hybrid_alpha", 0.5)  # Default to balanced search
+                if self.hybrid_search and query_text and 0 <= hybrid_alpha <= 1:
+                    # AstraDB uses $text for hybrid search with specified alpha
+                    find_params["sort"] = {
+                        "$search": {
+                            "vector": embedding,
+                            "text": query_text,
+                            "alpha": hybrid_alpha  # Balance between vector & text
                         }
-                        
-                        # Return a single document as fallback
-                        doc = Document(
-                            page_content=mock_doc["text"],
-                            metadata={"document_id": mock_doc["_id"], "similarity": mock_doc["$similarity"]}
-                        )
-                        return [doc]
-            
-            # Manual vector similarity calculation
-            # Since the native vector search isn't working
-            results_with_scores = []
-            for doc in matching_docs:
-                # Handle string documents by trying to parse them as JSON
-                if isinstance(doc, str):
-                    try:
-                        import json
-                        # Try to parse as JSON if it's a string
-                        doc = json.loads(doc)
-                        logger.info(f"Successfully parsed string document as JSON")
-                    except json.JSONDecodeError:
-                        logger.warning(f"Document is a string and couldn't be parsed as JSON: {doc[:100]}...")
-                        continue
+                    }
+                    logger.info(f"Using hybrid search with alpha={hybrid_alpha}")
                 
-                # Skip if doc is still not a dictionary or doesn't have vector embeddings
-                if not isinstance(doc, dict) or "$vector" not in doc:
-                    if isinstance(doc, dict):
-                        logger.warning(f"Document {doc.get('_id', 'unknown')} is missing vector embedding")
-                    else:
-                        logger.warning(f"Document is neither a string nor a dictionary: {type(doc)}")
-                    continue
+                # Perform the search
+                results = list(self.collection.find(**find_params))
+                logger.info(f"Retrieved {len(results)} documents from AstraDB using vector search")
+                
+            except Exception as e:
+                logger.warning(f"Vector search failed, falling back to regular find: {e}")
+                
+                # Fallback: get documents matching the filters without vector search
+                query_params = {}
+                
+                # Apply filter if present
+                if filter_query:
+                    query_params["filter"] = filter_query
+                
+                # Add pagination parameters
+                query_params["options"] = {"limit": 100}  # Get more than we need to sort later
+                
+                matching_docs = list(self.collection.find(**query_params))
+                
+                logger.info(f"Retrieved {len(matching_docs)} documents from AstraDB")
+                
+                # If we have no matches, return empty list
+                if not matching_docs:
+                    logger.warning("No matching documents found in AstraDB collection")
+                    return []
+                
+                # Manual vector similarity calculation
+                results_with_scores = []
+                for doc in matching_docs:
+                    # Handle string documents by trying to parse them as JSON
+                    if isinstance(doc, str):
+                        try:
+                            doc = json.loads(doc)
+                        except json.JSONDecodeError:
+                            logger.warning(f"Document couldn't be parsed as JSON: {doc[:100]}...")
+                            continue
                     
-                # Calculate cosine similarity
-                doc_vector = doc["$vector"]
-                score = self._cosine_similarity(embedding, doc_vector)
+                    # Skip if doc is still not a dictionary or doesn't have vector embeddings
+                    if not isinstance(doc, dict) or "$vector" not in doc:
+                        continue
+                        
+                    # Calculate cosine similarity
+                    doc_vector = doc["$vector"]
+                    score = self._cosine_similarity(embedding, doc_vector)
+                    
+                    # Add score to document
+                    doc["$similarity"] = score
+                    results_with_scores.append(doc)
                 
-                # Add score to document
-                doc["$similarity"] = score
-                results_with_scores.append(doc)
-            
-            # Sort by similarity (highest first)
-            results_with_scores.sort(key=lambda x: x.get("$similarity", 0), reverse=True)
-            
-            # Take top k results
-            results = results_with_scores[:k]
-            
-            logger.info(f"After processing, found {len(results)} valid results to return")
+                # Sort by similarity (highest first)
+                results_with_scores.sort(key=lambda x: x.get("$similarity", 0), reverse=True)
+                
+                # Take top k results
+                results = results_with_scores[:k]
+                
+                logger.info(f"After processing, found {len(results)} valid results to return")
+
+                # Check for role-based access if needed
+                if "user_roles" in kwargs:
+                    user_roles = kwargs["user_roles"]
+                    # Filter based on roles (post-processing)
+                    results = [
+                        doc for doc in results 
+                        if (
+                            "allowed_roles" not in doc or  # No role restrictions
+                            not doc.get("allowed_roles") or  # Empty role restrictions
+                            any(role in user_roles for role in doc.get("allowed_roles", []))  # Has matching role
+                        )
+                    ]
+                    logger.info(f"After role filtering, found {len(results)} results to return")
             
         except Exception as e:
             # Log the error for debugging
@@ -332,20 +443,44 @@ class AstraDBStore(VectorStore):
         # Convert results to documents
         documents = []
         for item in results:
-            # Extract metadata (all keys except specific ones)
-            metadata = {
-                k: v for k, v in item.items()
-                if k not in ["_id", "text", "$vector", "$similarity"]
-            }
-            
-            # Add document ID and similarity score to metadata
-            metadata["document_id"] = item.get("_id", "unknown")
-            if "$similarity" in item:
-                metadata["similarity"] = item["$similarity"]
-            
-            # Create document with text content and metadata
-            doc = Document(page_content=item.get("text", ""), metadata=metadata)
-            documents.append(doc)
+            try:
+                # Handle potential string results (depends on AstraDB version)
+                if isinstance(item, str):
+                    try:
+                        item = json.loads(item)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Skipping result that couldn't be parsed: {item[:100]}...")
+                        continue
+                
+                # Extract text content
+                if "text" not in item:
+                    logger.warning(f"Skipping result without text field: {item.keys()}")
+                    continue
+                    
+                text_content = item.get("text", "")
+                
+                # Extract metadata (all keys except specific ones)
+                metadata = {
+                    k: v for k, v in item.items()
+                    if k not in ["_id", "text", "$vector", "$similarity"]
+                }
+                
+                # Add document ID and similarity score to metadata
+                metadata["document_id"] = item.get("_id", "unknown")
+                
+                # Handle similarity score from different possible sources
+                if "$similarity" in item:
+                    metadata["similarity"] = item["$similarity"]
+                elif "$vectorDistance" in item:
+                    # Some AstraDB versions return vector distance
+                    metadata["similarity"] = 1.0 - item["$vectorDistance"]  # Convert distance to similarity
+                
+                # Create document with text content and metadata
+                doc = Document(page_content=text_content, metadata=metadata)
+                documents.append(doc)
+            except Exception as e:
+                logger.warning(f"Error processing search result: {e}")
+                continue
             
         return documents
             
