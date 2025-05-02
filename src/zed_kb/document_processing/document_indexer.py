@@ -23,8 +23,8 @@ class DocumentIndexer:
     """Handles indexing of documents in vector stores with security filtering."""
 
     VECTOR_STORES = {
-        "faiss": FAISS, 
-        "chroma": Chroma, 
+        "faiss": FAISS,
+        "chroma": Chroma,
         "astradb": AstraDBStore
     }
 
@@ -110,17 +110,18 @@ class DocumentIndexer:
                 embedding=self.embedding_model,
                 persist_directory=self.persist_directory,
             )
-            
+
         elif self.vector_store_type == "astradb":
             # Configure AstraDB
             if not documents:
                 documents = []
-                
+
             # Create AstraDB store with hybrid search if enabled
             self.vector_store = AstraDBStore.from_documents(
                 documents=documents,
                 embedding=self.embedding_model,
-                collection_name=self.astra_config.get("collection_name", "zed_kb_documents"),
+                collection_name=self.astra_config.get(
+                    "collection_name", "zed_kb_documents"),
                 token=self.astra_config.get("token"),
                 api_endpoint=self.astra_config.get("api_endpoint"),
                 astra_db_id=self.astra_config.get("astra_db_id"),
@@ -254,7 +255,7 @@ class DocumentIndexer:
                     filter=metadata_filter,
                     hybrid_alpha=hybrid_alpha if self.hybrid_search else None
                 )
-            
+
             # For other vector stores, use the traditional approach
             filter_fn = self._create_metadata_filter(user_info)
 
@@ -263,15 +264,17 @@ class DocumentIndexer:
                 results = self.vector_store.similarity_search(
                     query, k=k * 5
                 )  # Get more results to filter down
-                filtered_results = [doc for doc in results if filter_fn(doc.metadata)]
+                filtered_results = [
+                    doc for doc in results if filter_fn(doc.metadata)]
                 return filtered_results[:k]
 
             # For other vector stores with metadata filtering
             else:
                 # Add role-based access control metadata to filter
                 if user_info.get("roles"):
-                    metadata_filter["allowed_roles"] = {"$in": user_info["roles"]}
-                    
+                    metadata_filter["allowed_roles"] = {
+                        "$in": user_info["roles"]}
+
                 # Add clearance level filtering
                 if user_info.get("clearance"):
                     user_clearance = user_info["clearance"]
@@ -283,11 +286,14 @@ class DocumentIndexer:
                         "restricted": 3,
                         "top_secret": 4
                     }
-                    user_clearance_level = clearance_levels.get(user_clearance, 0)
-                    
+                    user_clearance_level = clearance_levels.get(
+                        user_clearance, 0)
+
                     # Filter to only include documents with equal or lower security level
-                    eligible_levels = [k for k, v in clearance_levels.items() if v <= user_clearance_level]
-                    metadata_filter["security_level"] = {"$in": eligible_levels}
+                    eligible_levels = [
+                        k for k, v in clearance_levels.items() if v <= user_clearance_level]
+                    metadata_filter["security_level"] = {
+                        "$in": eligible_levels}
 
         # For standard vector search or for vector stores that don't have specialized security search
         if self.vector_store_type == "astradb" and self.hybrid_search and hasattr(self.vector_store, "similarity_search"):
@@ -382,7 +388,8 @@ class DocumentIndexer:
         """
         try:
             if self.vector_store_type == "faiss":
-                self.vector_store = FAISS.load_local(file_path, self.embedding_model)
+                self.vector_store = FAISS.load_local(
+                    file_path, self.embedding_model)
                 return True
             elif self.vector_store_type == "chroma" and os.path.exists(
                 self.persist_directory

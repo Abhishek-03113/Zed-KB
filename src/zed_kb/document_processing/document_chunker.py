@@ -24,7 +24,8 @@ class DocumentChunker:
         "token": TokenTextSplitter,
         "character": CharacterTextSplitter,
         "markdown": MarkdownTextSplitter,
-        "html": HTMLHeaderTextSplitter,  # Updated to use HTMLHeaderTextSplitter instead of HTMLTextSplitter
+        # Updated to use HTMLHeaderTextSplitter instead of HTMLTextSplitter
+        "html": HTMLHeaderTextSplitter,
     }
 
     def __init__(
@@ -83,7 +84,8 @@ class DocumentChunker:
             The detected format
         """
         source = (
-            document.metadata.get("source", "").lower() if document.metadata else ""
+            document.metadata.get(
+                "source", "").lower() if document.metadata else ""
         )
 
         if source.endswith(".md") or source.endswith(".markdown"):
@@ -158,7 +160,8 @@ class DocumentChunker:
         chunks = splitter.split_documents([document])
 
         # Add metadata to chunks
-        enriched_chunks = self._enrich_metadata_with_chunk_info(chunks, document)
+        enriched_chunks = self._enrich_metadata_with_chunk_info(
+            chunks, document)
 
         return enriched_chunks
 

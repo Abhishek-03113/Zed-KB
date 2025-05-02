@@ -1,18 +1,13 @@
 """
 Metadata extractor module for Zed-KB.
-Enhances document metadata by extracting useful information.
+Provides a uniform metadata schema for documents.
 """
 from typing import List, Dict, Any, Optional
-import re
-import datetime
-from pathlib import Path
-import os
-
 from langchain.schema import Document
 
 
 class MetadataExtractor:
-    """Extracts and enhances metadata from documents."""
+    """Extracts and assigns uniform metadata to documents."""
 
     def __init__(self):
         """Initialize the metadata extractor."""
@@ -20,13 +15,14 @@ class MetadataExtractor:
 
     def extract_metadata(self, document: Document) -> Document:
         """
-        Extract metadata from a document and attach it to the document.
+        Apply uniform metadata schema to a document.
+        Does not extract information from content or filesystem.
 
         Args:
-            document: Document to extract metadata from
+            document: Document to apply metadata schema to
 
         Returns:
-            Document with enhanced metadata
+            Document with uniform metadata schema
         """
         # Create a copy of the document to avoid modifying the original
         enhanced_doc = Document(
@@ -34,128 +30,34 @@ class MetadataExtractor:
             metadata=document.metadata.copy() if document.metadata else {},
         )
 
-        # Add timestamp metadata
-        enhanced_doc.metadata["processed_at"] = datetime.datetime.now(
-        ).isoformat()
+        # Apply uniform metadata schema with default values
+        # Security metadata
+        if "security_level" not in enhanced_doc.metadata:
+            enhanced_doc.metadata["security_level"] = "internal"
+        
+        if "allowed_roles" not in enhanced_doc.metadata:
+            enhanced_doc.metadata["allowed_roles"] = []
+            
+        if "allowed_users" not in enhanced_doc.metadata:
+            enhanced_doc.metadata["allowed_users"] = []
 
-        # Extract content-based metadata
-        content_metadata = self._extract_content_metadata(
-            enhanced_doc.page_content)
-        enhanced_doc.metadata.update(content_metadata)
-
-        # Extract path-based metadata
-        if "source" in enhanced_doc.metadata:
-            path_metadata = self._extract_path_metadata(
-                enhanced_doc.metadata["source"])
-            enhanced_doc.metadata.update(path_metadata)
+        # Document identifier metadata (preserve existing or initialize)
+        if "doc_id" not in enhanced_doc.metadata and "source" in enhanced_doc.metadata:
+            enhanced_doc.metadata["doc_id"] = enhanced_doc.metadata["source"]
 
         return enhanced_doc
 
     def extract_batch_metadata(self, documents: List[Document]) -> List[Document]:
         """
-        Extract metadata from a batch of documents.
+        Apply uniform metadata schema to a batch of documents.
 
         Args:
-            documents: List of documents to extract metadata from
+            documents: List of documents to apply metadata schema to
 
         Returns:
-            List of documents with enhanced metadata
+            List of documents with uniform metadata schema
         """
         return [self.extract_metadata(doc) for doc in documents]
-
-    def _extract_content_metadata(self, content: str) -> Dict[str, Any]:
-        """
-        Extract metadata from document content.
-
-        Args:
-            content: Document content
-
-        Returns:
-            Dictionary of extracted metadata
-        """
-        metadata = {}
-
-        # Extract content type/category through simple heuristics
-        if re.search(r"(contract|agreement|terms|conditions)", content, re.IGNORECASE):
-            metadata["content_type"] = "legal"
-            metadata["sensitivity"] = "high"
-
-        elif re.search(r"(confidential|proprietary|sensitive)", content, re.IGNORECASE):
-            metadata["sensitivity"] = "high"
-
-        elif re.search(r"(financial|revenue|profit|loss)", content, re.IGNORECASE):
-            metadata["content_type"] = "financial"
-            metadata["sensitivity"] = "high"
-
-        elif re.search(r"(report|analysis|study|research)", content, re.IGNORECASE):
-            metadata["content_type"] = "report"
-            metadata["sensitivity"] = "medium"
-
-        elif re.search(r"(manual|guide|instruction|how\sto)", content, re.IGNORECASE):
-            metadata["content_type"] = "manual"
-            metadata["sensitivity"] = "low"
-
-        # Extract dates - look for common date formats
-        date_pattern = r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})"
-        dates = re.findall(date_pattern, content)
-        if dates:
-            # Take only the first 5 dates
-            metadata["extracted_dates"] = dates[:5]
-
-        return metadata
-
-    def _extract_path_metadata(self, file_path: str) -> Dict[str, Any]:
-        """
-        Extract metadata from file path.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            Dictionary of extracted metadata
-        """
-        metadata = {}
-        path = Path(file_path)
-
-        # File metadata
-        metadata["file_name"] = path.name
-        metadata["file_extension"] = path.suffix.lower()
-        metadata["file_size"] = (
-            os.path.getsize(file_path) if os.path.exists(file_path) else None
-        )
-
-        # Last modified time
-        if os.path.exists(file_path):
-            metadata["last_modified"] = datetime.datetime.fromtimestamp(
-                os.path.getmtime(file_path)
-            ).isoformat()
-
-        # Directory structure metadata
-        parts = path.parts
-        if len(parts) >= 2:
-            # Extract department or category from directory structure
-            metadata["directory"] = parts[-2]
-
-            # Try to infer department from path
-            lower_path = file_path.lower()
-            if "hr" in lower_path or "human resources" in lower_path:
-                metadata["department"] = "HR"
-            elif "finance" in lower_path:
-                metadata["department"] = "Finance"
-            elif "legal" in lower_path:
-                metadata["department"] = "Legal"
-            elif "sales" in lower_path:
-                metadata["department"] = "Sales"
-            elif "marketing" in lower_path:
-                metadata["department"] = "Marketing"
-            elif "engineering" in lower_path or "dev" in lower_path:
-                metadata["department"] = "Engineering"
-            elif "product" in lower_path:
-                metadata["department"] = "Product"
-            elif "support" in lower_path or "customer" in lower_path:
-                metadata["department"] = "Customer Support"
-
-        return metadata
 
     def add_security_metadata(
         self,
@@ -216,5 +118,52 @@ class MetadataExtractor:
             self.add_security_metadata(
                 doc, security_level, allowed_roles, allowed_users
             )
+            for doc in documents
+        ]
+
+    def add_document_metadata(
+        self,
+        document: Document,
+        metadata: Dict[str, Any]
+    ) -> Document:
+        """
+        Add plain document metadata to a document.
+        
+        Args:
+            document: Document to add metadata to
+            metadata: Dictionary of metadata to add
+            
+        Returns:
+            Document with added metadata
+        """
+        # Create a copy of the document to avoid modifying the original
+        enhanced_doc = Document(
+            page_content=document.page_content,
+            metadata=document.metadata.copy() if document.metadata else {},
+        )
+        
+        # Add the metadata
+        for key, value in metadata.items():
+            enhanced_doc.metadata[key] = value
+            
+        return enhanced_doc
+        
+    def add_batch_document_metadata(
+        self,
+        documents: List[Document],
+        metadata: Dict[str, Any]
+    ) -> List[Document]:
+        """
+        Add plain document metadata to a batch of documents.
+        
+        Args:
+            documents: List of documents to add metadata to
+            metadata: Dictionary of metadata to add
+            
+        Returns:
+            List of documents with added metadata
+        """
+        return [
+            self.add_document_metadata(doc, metadata)
             for doc in documents
         ]

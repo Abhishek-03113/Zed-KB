@@ -117,7 +117,7 @@ class DocumentLoader:
                     print(f"Error loading {file_path}: {e}")
 
         return documents
-    
+
     # following are future additions for loading Notion and Confluence content
 
     def load_notion(

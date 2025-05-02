@@ -1,1 +1,0 @@
-        options["vector"] = vector_options
