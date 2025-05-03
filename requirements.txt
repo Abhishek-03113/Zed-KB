@@ -26,6 +26,7 @@ uvicorn>=0.23.2
 python-jose>=3.3.0
 passlib>=1.7.4
 python-multipart>=0.0.6
+permit-sdk>=0.2.0  # Permit.io SDK for authorization
 
 # Testing
 pytest>=7.4.0

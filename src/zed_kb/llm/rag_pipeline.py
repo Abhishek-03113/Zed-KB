@@ -13,6 +13,8 @@ from langchain_core.output_parsers import StrOutputParser
 
 from .gemini_model import GeminiLLM
 from .prompt_templates import create_rag_prompt, format_documents
+from ..auth.middleware import require_permission, with_auth_context
+from ..auth.user_manager import get_user_manager, UserManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ class RAGPipeline:
         llm: Optional[BaseLLM] = None,
         num_results: int = 5,
         security_level: str = "general",
+        user_manager: Optional[UserManager] = None,
     ):
         """
         Initialize the RAG Pipeline.
@@ -35,6 +38,7 @@ class RAGPipeline:
             llm: Language model to use for generation (if None, uses GeminiLLM)
             num_results: Number of documents to retrieve for each query
             security_level: Default security level for prompts ('general' or 'confidential')
+            user_manager: Optional UserManager for authorization checks
         """
         # Initialize components
         self.document_indexer = document_indexer
@@ -42,6 +46,7 @@ class RAGPipeline:
         self.num_results = num_results
         self.security_level = security_level
         self.output_parser = StrOutputParser()
+        self.user_manager = user_manager or get_user_manager()
         
         # Create prompt template
         self.prompt_template = create_rag_prompt(security_level=self.security_level)
@@ -66,6 +71,39 @@ class RAGPipeline:
                         user_info=user_info,
                         k=self.num_results,
                     )
+                    
+                    # If the user has an ID, apply post-retrieval permission filtering
+                    if user_info and user_info.get("user_id") and results:
+                        user_id = user_info["user_id"]
+                        
+                        # Convert Document objects to dicts for permission checking 
+                        doc_dicts = [
+                            {
+                                "doc_id": doc.metadata.get("doc_id") or doc.metadata.get("document_id", ""),
+                                "security_level": doc.metadata.get("security_level", "public"),
+                                "allowed_roles": doc.metadata.get("allowed_roles", []),
+                                "allowed_users": doc.metadata.get("allowed_users", []),
+                            }
+                            for doc in results
+                        ]
+                        
+                        # Use UserManager to filter based on permissions
+                        allowed_docs = self.user_manager.filter_documents(
+                            user_id=user_id,
+                            documents=doc_dicts,
+                            action="read"
+                        )
+                        
+                        # Extract IDs of allowed documents
+                        allowed_ids = [doc.get("doc_id", "") for doc in allowed_docs]
+                        
+                        # Filter results to only include documents user has permission to access
+                        results = [
+                            doc for doc in results
+                            if (doc.metadata.get("doc_id", "") in allowed_ids or
+                                doc.metadata.get("document_id", "") in allowed_ids)
+                        ]
+                        
                     return results
                 else:
                     logger.error("Document indexer not initialized")
@@ -106,6 +144,7 @@ class RAGPipeline:
         else:
             return "general"
 
+    @with_auth_context(get_user_id=lambda *args, **kwargs: kwargs.get("user_info", {}).get("user_id"))
     def run(
         self,
         query: str,
@@ -162,6 +201,7 @@ class RAGPipeline:
             "source_count": len(retrieved_docs)
         }
     
+    @with_auth_context(get_user_id=lambda *args, **kwargs: kwargs.get("user_info", {}).get("user_id"))
     def run_with_citations(
         self,
         query: str,

@@ -15,6 +15,10 @@ from ..vector_store.gemini_embeddings import GeminiEmbeddings
 from ..vector_store.openai_embeddings import OpenAIEmbeddings
 from ..vector_store.astra_db import AstraDBStore
 
+# Import our authorization components
+from ..auth.user_manager import get_user_manager, UserManager
+from ..auth.permit_client import get_permit_client
+
 
 class DocumentIndexer:
     """Handles indexing of documents in AstraDB vector store with security filtering."""
@@ -36,6 +40,7 @@ class DocumentIndexer:
         collection_name: str = "zed_kb_documents",
         hybrid_search: bool = True,
         astra_config: Optional[Dict[str, Any]] = None,
+        user_manager: Optional[UserManager] = None,
     ):
         """
         Initialize the document indexer for AstraDB.
@@ -46,6 +51,7 @@ class DocumentIndexer:
             collection_name: Name of the AstraDB collection to use
             hybrid_search: Whether to enable hybrid search
             astra_config: Configuration for AstraDB connection
+            user_manager: Optional UserManager instance for permission checks
         """
         if embedding_provider not in self.EMBEDDING_MODELS:
             raise ValueError(
@@ -64,6 +70,9 @@ class DocumentIndexer:
         self.embedding_model = self.EMBEDDING_MODELS[embedding_provider](
             model=embedding_model
         )
+
+        # Initialize user manager for permission checks if provided
+        self.user_manager = user_manager or get_user_manager()
 
         # Vector store will be initialized when needed
         self.vector_store = None
@@ -152,46 +161,93 @@ class DocumentIndexer:
 
         # Apply security filtering if user info is provided
         if user_info:
-            # Use the specialized security-aware search method if available
-            if hasattr(self.vector_store, "similarity_search_with_security"):
-                return self.vector_store.similarity_search_with_security(
-                    query=query,
-                    user_info=user_info,
-                    k=k,
-                    filter=metadata_filter,
-                    hybrid_alpha=hybrid_alpha if self.hybrid_search else None
+            # Get user ID for permission checks
+            user_id = user_info.get("user_id")
+            
+            # If we have a valid user ID, use the user manager to get a security filter
+            if user_id:
+                # Get permission-based filter from user manager
+                security_filter = self.user_manager.get_vector_store_filter(
+                    user_id=user_id,
+                    action="read"
                 )
+                
+                # Merge security filter with any existing filters
+                if security_filter:
+                    metadata_filter.update(security_filter)
+            else:
+                # Use the specialized security-aware search method if available
+                if hasattr(self.vector_store, "similarity_search_with_security"):
+                    return self.vector_store.similarity_search_with_security(
+                        query=query,
+                        user_info=user_info,
+                        k=k,
+                        filter=metadata_filter,
+                        hybrid_alpha=hybrid_alpha if self.hybrid_search else None
+                    )
 
-            # Otherwise, enhance the filter with security constraints
-            if user_info.get("roles"):
-                metadata_filter["allowed_roles"] = {
-                    "$in": user_info["roles"]
-                }
+                # Legacy security filtering logic
+                if user_info.get("roles"):
+                    metadata_filter["allowed_roles"] = {
+                        "$in": user_info["roles"]
+                    }
 
-            # Add clearance level filtering
-            if user_info.get("clearance"):
-                user_clearance = user_info["clearance"]
-                # Convert to numeric levels for comparison based on schema.json
-                clearance_levels = {
-                    "public": 0,
-                    "internal": 1,
-                    "confidential": 2
-                }
-                user_clearance_level = clearance_levels.get(user_clearance, 0)
+                # Add clearance level filtering
+                if user_info.get("clearance"):
+                    user_clearance = user_info["clearance"]
+                    # Convert to numeric levels for comparison based on schema.json
+                    clearance_levels = {
+                        "public": 0,
+                        "internal": 1,
+                        "confidential": 2
+                    }
+                    user_clearance_level = clearance_levels.get(user_clearance, 0)
 
-                # Filter to only include documents with equal or lower security level
-                eligible_levels = [
-                    k for k, v in clearance_levels.items() if v <= user_clearance_level
-                ]
-                metadata_filter["security_level"] = {
-                    "$in": eligible_levels
-                }
+                    # Filter to only include documents with equal or lower security level
+                    eligible_levels = [
+                        k for k, v in clearance_levels.items() if v <= user_clearance_level
+                    ]
+                    metadata_filter["security_level"] = {
+                        "$in": eligible_levels
+                    }
 
         # Use hybrid search if enabled
         results = self.vector_store.similarity_search(
             query, k=k, filter=metadata_filter,
             hybrid_alpha=hybrid_alpha if self.hybrid_search else None
         )
+
+        # If user_info has a valid user_id, apply post-retrieval permission filtering
+        if user_info and user_info.get("user_id") and results:
+            # Get security levels for each document ID
+            user_id = user_info["user_id"]
+            
+            # Convert langchain Documents to dictionaries for filtering
+            doc_dicts = []
+            for doc in results:
+                doc_dict = {
+                    "doc_id": doc.metadata.get("doc_id") or doc.metadata.get("document_id"),
+                    "security_level": doc.metadata.get("security_level", "public"),
+                    "allowed_roles": doc.metadata.get("allowed_roles", []),
+                    "allowed_users": doc.metadata.get("allowed_users", []),
+                }
+                doc_dicts.append(doc_dict)
+                
+            # Get filtered document IDs that user can access
+            allowed_docs = self.user_manager.filter_documents(
+                user_id=user_id, 
+                documents=doc_dicts
+            )
+            
+            # Get IDs of allowed documents
+            allowed_ids = [doc.get("doc_id") for doc in allowed_docs]
+            
+            # Filter results to only include allowed documents
+            results = [
+                doc for doc in results 
+                if (doc.metadata.get("doc_id") in allowed_ids or 
+                    doc.metadata.get("document_id") in allowed_ids)
+            ]
 
         return results
 
