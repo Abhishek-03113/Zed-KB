@@ -64,7 +64,7 @@ def main():
     internal_id = processor.process_file(
         file_path="./data/test.pdf",
         metadata={"category": "technical", "topic": "api", "allow_quotes": True},
-        security_level="internal",
+        security_level="public",
         allowed_roles=["developer", "product", "technical_writer"],
     )
     print(f"  Processed internal document ID: {internal_id}")
@@ -73,7 +73,7 @@ def main():
     confidential_id = processor.process_file(
         file_path="./data/test.pdf",
         metadata={"category": "research", "topic": "strategy", "allow_quotes": False},
-        security_level="confidential",
+        security_level="public",
         allowed_roles=["executive", "research"],
     )
     print(f"  Processed confidential document ID: {confidential_id}")
@@ -98,7 +98,7 @@ def main():
     
     # Define example queries
     queries = [
-        "What are the key API authentication methods described in the documentation?",
+        "Is twitter data actually usefull for twitter data analysis?",
         "Explain the main strategy recommendations for our company.",
     ]
     
