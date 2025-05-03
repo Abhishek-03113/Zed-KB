@@ -24,7 +24,7 @@ class RAGPipeline:
         self,
         document_indexer=None,
         llm: Optional[BaseLLM] = None,
-        num_results: int = 5,
+        num_results: int = 10,
         access_level: str = "user",
     ):
         """
@@ -39,7 +39,7 @@ class RAGPipeline:
         # Initialize components
         self.document_indexer = document_indexer
         self.llm = llm or GeminiLLM(
-            model_name="gemini-1.5-pro-latest", temperature=0.2)
+            model_name="gemini-2.0-flash", temperature=0.2)
         self.num_results = num_results
         self.access_level = access_level
         self.output_parser = StrOutputParser()

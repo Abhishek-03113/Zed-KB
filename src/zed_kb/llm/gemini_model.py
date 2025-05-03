@@ -24,7 +24,7 @@ class GeminiLLM(BaseLLM):
     temperature: ClassVar[float] = 0.0
     top_p: ClassVar[float] = 0.95
     top_k: ClassVar[int] = 40
-    max_output_tokens: ClassVar[int] = 1024
+    max_output_tokens: ClassVar[int] = 2048
     api_key: ClassVar[Optional[str]] = None
     safety_settings: ClassVar[Optional[List[Dict[str, Any]]]] = None
 
