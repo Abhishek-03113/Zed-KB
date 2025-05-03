@@ -14,6 +14,7 @@ from src.zed_kb.vector_store.gemini_embeddings import GeminiEmbeddings
 from src.zed_kb.vector_store.pinecone_store import PineconeStore
 from src.zed_kb.document_processing.document_loader import DocumentLoader
 from src.zed_kb.document_processing import DocumentProcessor
+
 import os
 import sys
 import time
@@ -31,6 +32,19 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Environment variables
 import dotenv
+from pydantic import BaseModel
+
+
+class Usermodel(BaseModel): 
+    username: str
+    password: str
+    role: str
+    security_level: str 
+
+
+
+    
+
 
 # Add project root to path for importing zed_kb
 sys.path.insert(0, str(Path(__file__).parent))
