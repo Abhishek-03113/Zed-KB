@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse
 # Import our simplified authorization components
 from zed_kb.auth.permit_client import get_permit_client
 from zed_kb.auth.simple_auth import (
-    check_permission, 
-    sync_user, 
+    check_permission,
+    sync_user,
     require_permission,
     with_permission_check,
     get_user_from_request,
@@ -29,7 +29,7 @@ app = FastAPI(title="Zed-KB Simple Auth Example")
 # Sample user data
 SAMPLE_USERS = {
     "user1": {
-        "id": "user1",
+        "id": "0001",
         "firstName": "Alice",
         "lastName": "Smith",
         "email": "alice@example.com",
@@ -51,6 +51,7 @@ DOCUMENTS = {
 
 # ---- FastAPI Routes ----
 
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -62,16 +63,16 @@ async def sync_user_endpoint(user_id: str):
     """Sync a user with Permit.io."""
     if user_id not in SAMPLE_USERS:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     user_data = SAMPLE_USERS[user_id]
     success = await sync_user(user_data)
-    
+
     if not success:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to sync user {user_id}"}
         )
-        
+
     return {"message": f"User {user_id} synced successfully"}
 
 
@@ -80,10 +81,10 @@ async def check_document_permission(user_id: str, doc_id: str, action: str = "re
     """Check if a user has permission to access a document."""
     if user_id not in SAMPLE_USERS:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     if doc_id not in DOCUMENTS:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Use the simple permission check function
     permitted = await check_permission(
         user_id=user_id,
@@ -91,7 +92,7 @@ async def check_document_permission(user_id: str, doc_id: str, action: str = "re
         resource=doc_id,
         resource_type="document"
     )
-    
+
     if not permitted:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -100,7 +101,7 @@ async def check_document_permission(user_id: str, doc_id: str, action: str = "re
                 "message": f"{SAMPLE_USERS[user_id]['firstName']} is NOT PERMITTED to {action} document {doc_id}"
             }
         )
-        
+
     return {
         "permitted": True,
         "message": f"{SAMPLE_USERS[user_id]['firstName']} is PERMITTED to {action} document {doc_id}",
@@ -111,9 +112,9 @@ async def check_document_permission(user_id: str, doc_id: str, action: str = "re
 # Example using the FastAPI dependency for permission
 @app.get("/documents/{doc_id}")
 async def get_document(
-    doc_id: str, 
+    doc_id: str,
     user_info: UserInfo = Depends(require_permission(
-        action="read", 
+        action="read",
         resource=lambda req, doc_id: doc_id,
         resource_type="document"
     ))
@@ -121,7 +122,7 @@ async def get_document(
     """Get document if user has permission."""
     if doc_id not in DOCUMENTS:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # If we get here, permission has been granted
     return {
         "document": DOCUMENTS[doc_id],
@@ -136,7 +137,7 @@ async def get_document_api(doc_id: str, user_id: str):
     """Get document using the decorator approach."""
     if doc_id not in DOCUMENTS:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # If we get here, permission has been granted
     return {
         "document": DOCUMENTS[doc_id],
@@ -149,7 +150,7 @@ async def get_document_api(doc_id: str, user_id: str):
 async def example_direct_check():
     """Example of direct permission checks."""
     permit_client = get_permit_client()
-    
+
     print("Checking permissions directly:")
     for user_id, user in SAMPLE_USERS.items():
         for doc_id in DOCUMENTS:
@@ -164,12 +165,12 @@ async def example_direct_check():
 # Run example if this file is executed directly
 if __name__ == "__main__":
     # Set API key from environment or hardcode for testing
-    api_key = os.getenv("PERMIT_IO_API_KEY", 
-        "permit_key_mcuHJSmHb3TGCrEYAQSjY8pxbD2O1KrmQAf6Wt8kkqBvsQLHr656NPYFPrHSykUZO2dkHlVb8uDML4qKJImMml")
+    api_key = os.getenv("PERMIT_IO_API_KEY",
+                        "permit_key_mcuHJSmHb3TGCrEYAQSjY8pxbD2O1KrmQAf6Wt8kkqBvsQLHr656NPYFPrHSykUZO2dkHlVb8uDML4qKJImMml")
 
     # Create client with API key (not needed if PERMIT_IO_API_KEY is set)
     client = get_permit_client(api_key=api_key)
-    
+
     print("Running standalone example...")
     asyncio.run(example_direct_check())
     print("\nTo run the FastAPI server, execute: uvicorn examples.simple_auth_example:app --reload")
