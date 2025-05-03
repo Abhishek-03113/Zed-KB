@@ -273,7 +273,7 @@ class AstraDBStore(VectorStore):
             k: Number of documents to return
             filter: Optional metadata filter
             hybrid_alpha: Optional hybrid search parameter (0-1)
-                          0 = full text search, 1 = vector search
+                          0 = full text search, 1 = vector search (not currently used)
             **kwargs: Additional arguments
 
         Returns:
@@ -282,38 +282,42 @@ class AstraDBStore(VectorStore):
         # Generate query embedding
         query_embedding = self.embedding_function.embed_query(query)
         
-        # Prepare search options
-        search_options = {
+        # Prepare search parameters - pass as direct parameters instead of 'options'
+        search_params = {
+            "vector": query_embedding,
             "limit": k,
         }
         
+        # Add filter if provided
         if filter:
-            search_options["filter"] = filter
+            search_params["filter"] = filter
             
-        # Perform hybrid search if enabled and alpha provided
+        # Note: Hybrid search is not currently supported in the API version
+        # We'll log a warning if it was requested but not available
         if self.hybrid_search and hybrid_alpha is not None:
-            search_options["hybrid_search"] = {
-                "alpha": hybrid_alpha
-            }
+            logger.warning("Hybrid search requested but not available in current AstraDB API version")
+                
+        try:
+            # Execute the search using the updated parameter format
+            results = self.collection.vector_find(**search_params)
             
-        # Execute the search
-        results = self.collection.vector_find(
-            vector=query_embedding,
-            options=search_options
-        )
-        
-        # Convert results to Document objects
-        documents = []
-        for result in results:
-            # Extract metadata (exclude internal fields)
-            metadata = {k: v for k, v in result.items() 
-                      if not k.startswith("_") and not k.startswith("$") and k != "text"}
-            
-            documents.append(
-                Document(
-                    page_content=result.get("text", ""),
-                    metadata=metadata
+            # Convert results to Document objects
+            documents = []
+            for result in results:
+                # Extract metadata (exclude internal fields)
+                metadata = {k: v for k, v in result.items() 
+                          if not k.startswith("_") and not k.startswith("$") and k != "text"}
+                
+                documents.append(
+                    Document(
+                        page_content=result.get("text", ""),
+                        metadata=metadata
+                    )
                 )
-            )
+                
+            return documents
             
-        return documents
+        except Exception as e:
+            logger.error(f"Error during vector search: {e}")
+            # Return empty list on error
+            return []

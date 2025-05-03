@@ -3,7 +3,7 @@ Gemini 2.5 model integration for Zed-KB.
 Provides a LangChain-compatible interface to Google's Gemini 2.5 model.
 """
 
-from typing import List, Dict, Any, Optional, Mapping
+from typing import List, Dict, Any, Optional, Mapping, ClassVar
 import os
 import logging
 
@@ -11,7 +11,7 @@ import google.generativeai as genai
 from langchain.llms.base import LLM
 from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
-from pydantic import Field, validator
+from langchain_core.outputs import Generation, LLMResult
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 class GeminiLLM(BaseLLM):
     """Implementation of Google's Gemini models as a LangChain LLM."""
 
-    model_name: str = "gemini-1.5-pro-latest"
-    temperature: float = 0.0
-    top_p: float = 0.95
-    top_k: int = 40
-    max_output_tokens: int = 1024
-    api_key: Optional[str] = None
-    safety_settings: Optional[List[Dict[str, Any]]] = None
+    # Class attributes for Pydantic V2 compatibility
+    model_name: ClassVar[str] = "gemini-1.5-pro-latest"
+    temperature: ClassVar[float] = 0.0
+    top_p: ClassVar[float] = 0.95
+    top_k: ClassVar[int] = 40
+    max_output_tokens: ClassVar[int] = 1024
+    api_key: ClassVar[Optional[str]] = None
+    safety_settings: ClassVar[Optional[List[Dict[str, Any]]]] = None
 
     def __init__(
         self,
@@ -50,30 +51,83 @@ class GeminiLLM(BaseLLM):
             api_key: Google AI API key (if not provided, will look for GOOGLE_API_KEY env var)
             safety_settings: Optional safety settings for content filtering
         """
+        # Initialize the parent class first to ensure Pydantic fields are properly set
+        super().__init__(**kwargs)
+        
         # Set up API key
-        self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
-        if not self.api_key:
+        api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
             raise ValueError(
                 "Google API key is required. Please provide it as an argument or set the GOOGLE_API_KEY environment variable."
             )
 
-        genai.configure(api_key=self.api_key)
+        genai.configure(api_key=api_key)
 
-        # Configure model parameters
-        self.model_name = model_name
-        self.temperature = temperature
-        self.top_p = top_p
-        self.top_k = top_k
-        self.max_output_tokens = max_output_tokens
+        # Store configuration as instance attributes instead of class attributes
+        self._model_name = model_name
+        self._temperature = temperature
+        self._top_p = top_p
+        self._top_k = top_k
+        self._max_output_tokens = max_output_tokens
+        self._safety_settings = safety_settings
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def temperature(self) -> float:
+        return self._temperature
+
+    @property
+    def top_p(self) -> float:
+        return self._top_p
         
-        # Configure safety settings if provided
-        self.safety_settings = safety_settings
-
-        # Initialize the parent class
-        super().__init__(**kwargs)
+    @property
+    def top_k(self) -> int:
+        return self._top_k
+        
+    @property
+    def max_output_tokens(self) -> int:
+        return self._max_output_tokens
+        
+    @property
+    def safety_settings(self) -> Optional[List[Dict[str, Any]]]:
+        return self._safety_settings
 
     def _llm_type(self) -> str:
         return "gemini"
+
+    def _generate(
+        self,
+        prompts: List[str],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs,
+    ) -> LLMResult:
+        """
+        Generate text for a list of prompts.
+
+        Args:
+            prompts: List of prompts to generate text for
+            stop: Optional list of stop sequences
+            run_manager: Optional callback manager
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            LLMResult object containing the generated texts
+        """
+        generations = []
+        for prompt in prompts:
+            generation_text = self._call(
+                prompt=prompt, 
+                stop=stop, 
+                run_manager=run_manager, 
+                **kwargs
+            )
+            generations.append([Generation(text=generation_text)])
+        
+        return LLMResult(generations=generations)
 
     def _call(
         self,
