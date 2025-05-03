@@ -20,8 +20,7 @@ class DocumentProcessor:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         hybrid_search: bool = True,
-        vector_store_type: str = "astra",
-        astra_config: dict = None,
+        vector_store_type: str = "pinecone",
         pinecone_config: dict = None,
     ):
         """
@@ -34,8 +33,7 @@ class DocumentProcessor:
             chunk_size: Size of document chunks
             chunk_overlap: Overlap between chunks
             hybrid_search: Enable hybrid search (vector + keyword) if supported
-            vector_store_type: Type of vector store ('astra' or 'pinecone')
-            astra_config: Configuration for AstraDB connection
+            vector_store_type: Type of vector store ('pinecone' or 'memory')
             pinecone_config: Configuration for Pinecone connection
         """
         self.loader = DocumentLoader()
@@ -49,7 +47,6 @@ class DocumentProcessor:
             collection_name=collection_name,
             hybrid_search=hybrid_search,
             vector_store_type=vector_store_type,
-            astra_config=astra_config,
             pinecone_config=pinecone_config,
         )
 

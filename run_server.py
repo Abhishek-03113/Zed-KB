@@ -29,7 +29,7 @@ def main():
         print(f"Warning: Environment file {args.env_file} not found. Using default environment.")
     
     # Check for required environment variables
-    required_vars = ["ASTRA_DB_APPLICATION_TOKEN", "GOOGLE_API_KEY", "PERMIT_IO_API_KEY"]
+    required_vars = ["GOOGLE_API_KEY", "PERMIT_IO_API_KEY"]
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     
     if missing_vars:

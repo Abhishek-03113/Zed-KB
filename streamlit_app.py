@@ -132,7 +132,8 @@ def login_signup_page():
                     st.session_state.logged_in = True
                     st.session_state.username = user.get("username")
                     st.session_state.role = user.get("role", "user")
-                    st.session_state.password = password  # Store the password for API authentication
+                    # Store the password for API authentication
+                    st.session_state.password = password
                     st.success(
                         f"Logged in as {username} ({st.session_state.role})")
                     st.rerun()
@@ -169,7 +170,8 @@ def login_signup_page():
                     st.session_state.logged_in = True
                     st.session_state.username = new_username
                     st.session_state.role = role
-                    st.session_state.password = new_password  # Store the password for API authentication
+                    # Store the password for API authentication
+                    st.session_state.password = new_password
                     st.rerun()
                 else:
                     st.error(message)

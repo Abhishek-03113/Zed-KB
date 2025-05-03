@@ -7,7 +7,7 @@ built-in access controls and authorization mechanisms.
 
 # Import key modules for easy access
 from .document_processing import DocumentProcessor
-from .vector_store import GeminiEmbeddings, OpenAIEmbeddings, AstraDBStore
+from .vector_store import GeminiEmbeddings, OpenAIEmbeddings
 from .llm import GeminiLLM, RAGPipeline
 
 __version__ = "0.1.0"

@@ -1,6 +1,6 @@
 """
 Document indexer module for Zed-KB.
-Handles indexing of documents in vector stores (AstraDB or Pinecone).
+Handles indexing of documents in vector stores.
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -13,7 +13,6 @@ from langchain.embeddings.base import Embeddings
 # Import our custom vector store and embedding models
 from ..vector_store.gemini_embeddings import GeminiEmbeddings
 from ..vector_store.openai_embeddings import OpenAIEmbeddings
-from ..vector_store.astra_db import AstraDBStore
 from ..vector_store.pinecone_store import PineconeStore
 
 
@@ -36,9 +35,8 @@ class DocumentIndexer:
         embedding_model: str = "text-embedding-ada-002",
         collection_name: str = "zed_kb_documents",
         hybrid_search: bool = False,
-        astra_config: Optional[Dict[str, Any]] = None,
         pinecone_config: Optional[Dict[str, Any]] = None,
-        vector_store_type: str = "astra",
+        vector_store_type: str = "pinecone",
     ):
         """
         Initialize the document indexer.
@@ -48,9 +46,8 @@ class DocumentIndexer:
             embedding_model: Name of embedding model to use
             collection_name: Name of the collection/index to use
             hybrid_search: Whether to enable hybrid search (if supported)
-            astra_config: Configuration for AstraDB connection
             pinecone_config: Configuration for Pinecone connection
-            vector_store_type: Type of vector store to use ('astra' or 'pinecone')
+            vector_store_type: Type of vector store to use ('pinecone' or 'memory')
         """
         if embedding_provider not in self.EMBEDDING_MODELS:
             raise ValueError(
@@ -59,15 +56,12 @@ class DocumentIndexer:
             )
 
         self.hybrid_search = hybrid_search
-        self.astra_config = astra_config or {}
         self.pinecone_config = pinecone_config or {}
         self.vector_store_type = vector_store_type.lower()
 
         # Get the collection/index name
         self.collection_name = collection_name
-        if self.vector_store_type == "astra":
-            self.collection_name = self.astra_config.get("collection_name", collection_name)
-        elif self.vector_store_type == "pinecone":
+        if self.vector_store_type == "pinecone":
             self.collection_name = self.pinecone_config.get("index_name", collection_name)
 
         # Initialize embedding model
@@ -93,19 +87,7 @@ class DocumentIndexer:
             return
 
         # Create the appropriate vector store
-        if self.vector_store_type == "astra":
-            # Create AstraDB store with hybrid search if enabled
-            self.vector_store = AstraDBStore(
-                embedding_function=self.embedding_model,
-                collection_name=self.collection_name,
-                token=self.astra_config.get("token"),
-                api_endpoint=self.astra_config.get("api_endpoint"),
-                astra_db_id=self.astra_config.get("astra_db_id"),
-                astra_db_region=self.astra_config.get("astra_db_region"),
-                namespace=self.astra_config.get("namespace"),
-                hybrid_search=self.hybrid_search,
-            )
-        elif self.vector_store_type == "pinecone":
+        if self.vector_store_type == "pinecone":
             # Create Pinecone store with proper configuration
             print(f"Initializing Pinecone store with index name: {self.collection_name}")
             self.vector_store = PineconeStore(
@@ -120,7 +102,7 @@ class DocumentIndexer:
         else:
             raise ValueError(
                 f"Unsupported vector store type: {self.vector_store_type}. "
-                f"Choose from: 'astra', 'pinecone'."
+                f"Choose from: 'pinecone', 'memory'."
             )
 
         # Add initial documents if provided
