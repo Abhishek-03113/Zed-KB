@@ -80,7 +80,7 @@ def main():
 
     # Initialize the Gemini LLM
     llm = GeminiLLM(
-        model_name="gemini-1.5-pro-latest",
+        model_name="gemini-2.0-flash",
         temperature=0.2,
         top_p=0.95,
         max_output_tokens=1024,
