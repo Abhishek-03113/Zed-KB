@@ -34,10 +34,10 @@ class MetadataExtractor:
         # Security metadata
         if "security_level" not in enhanced_doc.metadata:
             enhanced_doc.metadata["security_level"] = "internal"
-        
+
         if "allowed_roles" not in enhanced_doc.metadata:
             enhanced_doc.metadata["allowed_roles"] = []
-            
+
         if "allowed_users" not in enhanced_doc.metadata:
             enhanced_doc.metadata["allowed_users"] = []
 
@@ -128,11 +128,11 @@ class MetadataExtractor:
     ) -> Document:
         """
         Add plain document metadata to a document.
-        
+
         Args:
             document: Document to add metadata to
             metadata: Dictionary of metadata to add
-            
+
         Returns:
             Document with added metadata
         """
@@ -141,13 +141,13 @@ class MetadataExtractor:
             page_content=document.page_content,
             metadata=document.metadata.copy() if document.metadata else {},
         )
-        
+
         # Add the metadata
         for key, value in metadata.items():
             enhanced_doc.metadata[key] = value
-            
+
         return enhanced_doc
-        
+
     def add_batch_document_metadata(
         self,
         documents: List[Document],
@@ -155,11 +155,11 @@ class MetadataExtractor:
     ) -> List[Document]:
         """
         Add plain document metadata to a batch of documents.
-        
+
         Args:
             documents: List of documents to add metadata to
             metadata: Dictionary of metadata to add
-            
+
         Returns:
             List of documents with added metadata
         """

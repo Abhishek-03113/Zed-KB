@@ -118,10 +118,15 @@ class DocumentChunker:
             chunk.metadata["chunk_total"] = doc_len
 
             # Add parent document ID if available
-            if parent_document and parent_document.metadata.get("document_id"):
-                chunk.metadata["parent_document_id"] = parent_document.metadata[
-                    "document_id"
-                ]
+            if parent_document and parent_document.metadata.get("doc_id"):
+                chunk.metadata["parent_doc_id"] = parent_document.metadata["doc_id"]
+            
+            # Inherit security metadata from parent document if available
+            if parent_document and parent_document.metadata:
+                # Copy security metadata
+                for security_field in ["security_level", "allowed_roles", "allowed_users"]:
+                    if security_field in parent_document.metadata:
+                        chunk.metadata[security_field] = parent_document.metadata[security_field]
 
         return chunks
 
