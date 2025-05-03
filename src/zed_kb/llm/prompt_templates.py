@@ -74,10 +74,10 @@ Question: {question}
 def create_rag_prompt(security_level: str = "general") -> ChatPromptTemplate:
     """
     Create a RAG prompt template based on security level.
-    
+
     Args:
         security_level: Security level for prompt ('general' or 'confidential')
-        
+
     Returns:
         ChatPromptTemplate for RAG
     """
@@ -85,41 +85,44 @@ def create_rag_prompt(security_level: str = "general") -> ChatPromptTemplate:
         system_prompt = CONFIDENTIAL_SYSTEM_PROMPT
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT
-    
+
     # Create the chat template
-    system_message_prompt = SystemMessagePromptTemplate.from_template(system_prompt)
-    human_message_prompt = HumanMessagePromptTemplate.from_template(QUESTION_PROMPT_TEMPLATE)
-    
+    system_message_prompt = SystemMessagePromptTemplate.from_template(
+        system_prompt)
+    human_message_prompt = HumanMessagePromptTemplate.from_template(
+        QUESTION_PROMPT_TEMPLATE)
+
     chat_prompt = ChatPromptTemplate.from_messages([
         system_message_prompt,
         human_message_prompt,
     ])
-    
+
     return chat_prompt
 
 
 def format_documents(docs: List[Document]) -> str:
     """
     Format a list of retrieved documents for inclusion in the prompt.
-    
+
     Args:
         docs: List of retrieved documents
-        
+
     Returns:
         Formatted document context as a string
     """
     formatted_docs = []
-    
+
     for i, doc in enumerate(docs):
         # Extract metadata
         metadata = doc.metadata
-        doc_id = metadata.get("doc_id") or metadata.get("document_id") or f"doc_{i+1}"
+        doc_id = metadata.get("doc_id") or metadata.get(
+            "document_id") or f"doc_{i+1}"
         security_level = metadata.get("security_level", "internal")
         source = metadata.get("source", "unknown")
-        
+
         # Check if direct quotes are allowed based on metadata
         allow_quotes = "yes" if metadata.get("allow_quotes", False) else "no"
-        
+
         # Format this document
         formatted_doc = DOCUMENT_PROMPT_TEMPLATE.format(
             doc_id=doc_id,
@@ -128,7 +131,7 @@ def format_documents(docs: List[Document]) -> str:
             source=source,
             page_content=doc.page_content
         )
-        
+
         formatted_docs.append(formatted_doc)
-    
+
     return "\n".join(formatted_docs)
