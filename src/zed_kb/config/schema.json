@@ -1,0 +1,7 @@
+{
+  "metadata": {
+    "security_level": ["public", "internal", "confidential"],
+    "allowed_roles": ["admin", "user", "guest", "superuser"],
+    "allowed_users": []
+  }
+}
