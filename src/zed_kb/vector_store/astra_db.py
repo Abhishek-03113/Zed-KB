@@ -3,7 +3,7 @@ AstraDB vector store implementation for Zed-KB.
 Provides integration with DataStax Astra DB for vector search with security level filtering.
 """
 
-from typing import List, Dict, Any, Optional, Callable, Union
+from typing import List, Dict, Any, Optional, Callable, Union, Tuple, Type
 import uuid
 import os
 import json
@@ -101,12 +101,11 @@ class AstraDBStore(VectorStore):
             collection_options = {
                 "vector": {
                     "dimension": vector_dimension,
-                    "similarity": "cosine"
+                    "metric": "cosine"  # Updated from 'similarity' to 'metric'
                 },
                 "indexing": {
-                    # Fields to exclude from indexing (using underscore)
-                    "deny_list": [],
-                    "include_vectors": True  # Ensure vector indexing is enabled
+                    # Fields to exclude from indexing
+                    "deny": []  # Updated from 'deny_list'
                 }
             }
 
@@ -210,3 +209,111 @@ class AstraDBStore(VectorStore):
         texts = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
         return self.add_texts(texts=texts, metadatas=metadatas, ids=ids, **kwargs)
+    
+    @classmethod
+    def from_texts(
+        cls: Type["AstraDBStore"],
+        texts: List[str],
+        embedding: Embeddings,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+        ids: Optional[List[str]] = None,
+        collection_name: str = "documents",
+        token: Optional[str] = None,
+        api_endpoint: Optional[str] = None,
+        astra_db_id: Optional[str] = None,
+        astra_db_region: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "AstraDBStore":
+        """
+        Create an AstraDBStore from texts.
+
+        Args:
+            texts: List of texts to add
+            embedding: Embedding function
+            metadatas: Optional list of metadatas
+            ids: Optional list of document IDs
+            collection_name: Name of the collection to use
+            token: AstraDB token
+            api_endpoint: AstraDB API endpoint
+            astra_db_id: AstraDB database ID
+            astra_db_region: AstraDB database region
+            **kwargs: Additional arguments to pass to the constructor
+
+        Returns:
+            AstraDBStore instance
+        """
+        store = cls(
+            embedding_function=embedding,
+            collection_name=collection_name,
+            token=token,
+            api_endpoint=api_endpoint,
+            astra_db_id=astra_db_id,
+            astra_db_region=astra_db_region,
+            **kwargs,
+        )
+        
+        if texts:
+            store.add_texts(texts=texts, metadatas=metadatas, ids=ids)
+            
+        return store
+
+    def similarity_search(
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[Dict[str, Any]] = None,
+        hybrid_alpha: Optional[float] = None,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """
+        Search for documents similar to the query.
+
+        Args:
+            query: Query text
+            k: Number of documents to return
+            filter: Optional metadata filter
+            hybrid_alpha: Optional hybrid search parameter (0-1)
+                          0 = full text search, 1 = vector search
+            **kwargs: Additional arguments
+
+        Returns:
+            List of similar Documents
+        """
+        # Generate query embedding
+        query_embedding = self.embedding_function.embed_query(query)
+        
+        # Prepare search options
+        search_options = {
+            "limit": k,
+        }
+        
+        if filter:
+            search_options["filter"] = filter
+            
+        # Perform hybrid search if enabled and alpha provided
+        if self.hybrid_search and hybrid_alpha is not None:
+            search_options["hybrid_search"] = {
+                "alpha": hybrid_alpha
+            }
+            
+        # Execute the search
+        results = self.collection.vector_find(
+            vector=query_embedding,
+            options=search_options
+        )
+        
+        # Convert results to Document objects
+        documents = []
+        for result in results:
+            # Extract metadata (exclude internal fields)
+            metadata = {k: v for k, v in result.items() 
+                      if not k.startswith("_") and not k.startswith("$") and k != "text"}
+            
+            documents.append(
+                Document(
+                    page_content=result.get("text", ""),
+                    metadata=metadata
+                )
+            )
+            
+        return documents

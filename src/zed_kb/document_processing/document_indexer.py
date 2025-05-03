@@ -171,13 +171,11 @@ class DocumentIndexer:
             # Add clearance level filtering
             if user_info.get("clearance"):
                 user_clearance = user_info["clearance"]
-                # Convert to numeric levels for comparison
+                # Convert to numeric levels for comparison based on schema.json
                 clearance_levels = {
                     "public": 0,
                     "internal": 1,
-                    "confidential": 2,
-                    "restricted": 3,
-                    "top_secret": 4
+                    "confidential": 2
                 }
                 user_clearance_level = clearance_levels.get(user_clearance, 0)
 

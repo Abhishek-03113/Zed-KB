@@ -14,10 +14,9 @@ class DocumentProcessor:
 
     def __init__(
         self,
-        vector_store_type: str = "faiss",
         embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-ada-002",
-        persist_directory: str = None,
+        collection_name: str = "zed_kb_documents",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         hybrid_search: bool = True,
@@ -27,14 +26,13 @@ class DocumentProcessor:
         Initialize the document processor.
 
         Args:
-            vector_store_type: Type of vector store to use ('faiss', 'chroma', or 'astradb')
             embedding_provider: Provider of embedding model ('openai' or 'gemini')
             embedding_model: Name of embedding model to use
-            persist_directory: Directory to persist vector store
+            collection_name: Name of the AstraDB collection to use
             chunk_size: Size of document chunks
             chunk_overlap: Overlap between chunks
-            hybrid_search: Enable hybrid search (vector + keyword) for supported vector stores
-            astra_config: Configuration for AstraDB connection (if using 'astradb')
+            hybrid_search: Enable hybrid search (vector + keyword) for AstraDB
+            astra_config: Configuration for AstraDB connection
         """
         self.loader = DocumentLoader()
         self.chunker = DocumentChunker(
@@ -42,10 +40,9 @@ class DocumentProcessor:
         )
         self.metadata_extractor = MetadataExtractor()
         self.indexer = DocumentIndexer(
-            vector_store_type=vector_store_type,
             embedding_provider=embedding_provider,
             embedding_model=embedding_model,
-            persist_directory=persist_directory,
+            collection_name=collection_name,
             hybrid_search=hybrid_search,
             astra_config=astra_config,
         )

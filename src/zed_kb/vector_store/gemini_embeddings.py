@@ -43,7 +43,12 @@ class GeminiEmbeddings(Embeddings):
 
         genai.configure(api_key=self.api_key)
 
-        self.model = model
+        # Ensure model name has the correct prefix
+        if not model.startswith("models/") and not model.startswith("tunedModels/"):
+            self.model = f"models/{model}"
+        else:
+            self.model = model
+            
         self.task_type = task_type
         self.title = title
 
