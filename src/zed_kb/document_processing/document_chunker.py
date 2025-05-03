@@ -162,7 +162,22 @@ class DocumentChunker:
             splitter = self.text_splitter
 
         # Split the document
+        # Check if the document has content to avoid errors
+        if not document.page_content or len(document.page_content.strip()) == 0:
+            print(f"Warning: Document has empty content. Source: {document.metadata.get('source', 'Unknown')}")
+            return []
+            
         chunks = splitter.split_documents([document])
+        
+        # Log chunking results for debugging
+        print(f"Document chunked into {len(chunks)} parts (source: {document.metadata.get('source', 'Unknown')})")
+        
+        # If we got no chunks, there might be an issue with the content
+        if not chunks:
+            print(f"Warning: Document produced 0 chunks. Content length: {len(document.page_content)}")
+            # Create a single chunk with the original content as a fallback
+            # This prevents documents from disappearing from search results
+            chunks = [document]
 
         # Add metadata to chunks
         enriched_chunks = self._enrich_metadata_with_chunk_info(

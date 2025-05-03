@@ -20,7 +20,9 @@ class DocumentProcessor:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         hybrid_search: bool = True,
+        vector_store_type: str = "astra",
         astra_config: dict = None,
+        pinecone_config: dict = None,
     ):
         """
         Initialize the document processor.
@@ -28,11 +30,13 @@ class DocumentProcessor:
         Args:
             embedding_provider: Provider of embedding model ('openai' or 'gemini')
             embedding_model: Name of embedding model to use
-            collection_name: Name of the AstraDB collection to use
+            collection_name: Name of the collection/index to use
             chunk_size: Size of document chunks
             chunk_overlap: Overlap between chunks
-            hybrid_search: Enable hybrid search (vector + keyword) for AstraDB
+            hybrid_search: Enable hybrid search (vector + keyword) if supported
+            vector_store_type: Type of vector store ('astra' or 'pinecone')
             astra_config: Configuration for AstraDB connection
+            pinecone_config: Configuration for Pinecone connection
         """
         self.loader = DocumentLoader()
         self.chunker = DocumentChunker(
@@ -44,7 +48,9 @@ class DocumentProcessor:
             embedding_model=embedding_model,
             collection_name=collection_name,
             hybrid_search=hybrid_search,
+            vector_store_type=vector_store_type,
             astra_config=astra_config,
+            pinecone_config=pinecone_config,
         )
 
     def process_file(

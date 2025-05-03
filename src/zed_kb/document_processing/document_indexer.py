@@ -1,6 +1,6 @@
 """
 Document indexer module for Zed-KB.
-Handles indexing of documents in AstraDB vector store with security awareness.
+Handles indexing of documents in vector stores (AstraDB or Pinecone).
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -14,14 +14,11 @@ from langchain.embeddings.base import Embeddings
 from ..vector_store.gemini_embeddings import GeminiEmbeddings
 from ..vector_store.openai_embeddings import OpenAIEmbeddings
 from ..vector_store.astra_db import AstraDBStore
-
-# Import our authorization components
-from ..auth.user_manager import get_user_manager, UserManager
-from ..auth.permit_client import get_permit_client
+from ..vector_store.pinecone_store import PineconeStore
 
 
 class DocumentIndexer:
-    """Handles indexing of documents in AstraDB vector store with security filtering."""
+    """Handles indexing of documents in vector stores."""
 
     EMBEDDING_MODELS = {
         "openai": lambda **kwargs: OpenAIEmbeddings(
@@ -38,20 +35,22 @@ class DocumentIndexer:
         embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-ada-002",
         collection_name: str = "zed_kb_documents",
-        hybrid_search: bool = True,
+        hybrid_search: bool = False,
         astra_config: Optional[Dict[str, Any]] = None,
-        user_manager: Optional[UserManager] = None,
+        pinecone_config: Optional[Dict[str, Any]] = None,
+        vector_store_type: str = "astra",
     ):
         """
-        Initialize the document indexer for AstraDB.
+        Initialize the document indexer.
 
         Args:
             embedding_provider: Provider of embedding model ('openai' or 'gemini')
             embedding_model: Name of embedding model to use
-            collection_name: Name of the AstraDB collection to use
-            hybrid_search: Whether to enable hybrid search
+            collection_name: Name of the collection/index to use
+            hybrid_search: Whether to enable hybrid search (if supported)
             astra_config: Configuration for AstraDB connection
-            user_manager: Optional UserManager instance for permission checks
+            pinecone_config: Configuration for Pinecone connection
+            vector_store_type: Type of vector store to use ('astra' or 'pinecone')
         """
         if embedding_provider not in self.EMBEDDING_MODELS:
             raise ValueError(
@@ -61,25 +60,31 @@ class DocumentIndexer:
 
         self.hybrid_search = hybrid_search
         self.astra_config = astra_config or {}
+        self.pinecone_config = pinecone_config or {}
+        self.vector_store_type = vector_store_type.lower()
 
-        # Get the collection name from config or use default
-        self.collection_name = self.astra_config.get(
-            "collection_name", collection_name)
+        # Get the collection/index name
+        self.collection_name = collection_name
+        if self.vector_store_type == "astra":
+            self.collection_name = self.astra_config.get("collection_name", collection_name)
+        elif self.vector_store_type == "pinecone":
+            self.collection_name = self.pinecone_config.get("index_name", collection_name)
 
         # Initialize embedding model
         self.embedding_model = self.EMBEDDING_MODELS[embedding_provider](
             model=embedding_model
         )
 
-        # Initialize user manager for permission checks if provided
-        self.user_manager = user_manager or get_user_manager()
-
         # Vector store will be initialized when needed
         self.vector_store = None
+        
+        # Track documents and chunks for debugging purposes
+        self.document_count = 0
+        self.chunk_count = 0
 
     def _initialize_vector_store(self, documents: Optional[List[Document]] = None):
         """
-        Initialize the AstraDB vector store.
+        Initialize the vector store based on configuration.
 
         Args:
             documents: Optional list of documents to initialize with
@@ -87,21 +92,40 @@ class DocumentIndexer:
         if self.vector_store is not None:
             return
 
-        # Create AstraDB store with hybrid search if enabled
-        self.vector_store = AstraDBStore(
-            embedding_function=self.embedding_model,
-            collection_name=self.collection_name,
-            token=self.astra_config.get("token"),
-            api_endpoint=self.astra_config.get("api_endpoint"),
-            astra_db_id=self.astra_config.get("astra_db_id"),
-            astra_db_region=self.astra_config.get("astra_db_region"),
-            namespace=self.astra_config.get("namespace"),
-            hybrid_search=self.hybrid_search,
-        )
+        # Create the appropriate vector store
+        if self.vector_store_type == "astra":
+            # Create AstraDB store with hybrid search if enabled
+            self.vector_store = AstraDBStore(
+                embedding_function=self.embedding_model,
+                collection_name=self.collection_name,
+                token=self.astra_config.get("token"),
+                api_endpoint=self.astra_config.get("api_endpoint"),
+                astra_db_id=self.astra_config.get("astra_db_id"),
+                astra_db_region=self.astra_config.get("astra_db_region"),
+                namespace=self.astra_config.get("namespace"),
+                hybrid_search=self.hybrid_search,
+            )
+        elif self.vector_store_type == "pinecone":
+            # Create Pinecone store with proper configuration
+            print(f"Initializing Pinecone store with index name: {self.collection_name}")
+            self.vector_store = PineconeStore(
+                embedding_function=self.embedding_model,
+                index_name=self.collection_name,
+                namespace=self.pinecone_config.get("namespace"),
+                api_key=self.pinecone_config.get("api_key"),
+                environment=self.pinecone_config.get("environment", "us-west1-gcp"),
+                cloud=self.pinecone_config.get("cloud", "aws"),
+                region=self.pinecone_config.get("region", "us-east-1"),
+            )
+        else:
+            raise ValueError(
+                f"Unsupported vector store type: {self.vector_store_type}. "
+                f"Choose from: 'astra', 'pinecone'."
+            )
 
         # Add initial documents if provided
         if documents:
-            self.vector_store.add_documents(documents)
+            self.add_documents(documents)
 
     def add_documents(self, documents: List[Document]) -> List[str]:
         """
@@ -123,131 +147,65 @@ class DocumentIndexer:
 
         # Initialize vector store if needed
         if self.vector_store is None:
-            self._initialize_vector_store(documents)
-            # Documents are added during initialization
-            return [doc.metadata["document_id"] for doc in documents]
+            self._initialize_vector_store()
+            
+        # Track how many documents/chunks we're processing
+        self.document_count += len(documents)
+        print(f"Adding {len(documents)} documents to {self.vector_store_type} store. Total documents: {self.document_count}")
+            
+        # Add documents to store in reasonable batches
+        if len(documents) > 50:
+            # Process in batches of 50 for large document sets
+            doc_ids = []
+            for i in range(0, len(documents), 50):
+                batch = documents[i:i+50]
+                print(f"Processing batch {i//50 + 1}/{(len(documents)-1)//50 + 1} ({len(batch)} documents)")
+                batch_ids = self.vector_store.add_documents(batch)
+                doc_ids.extend(batch_ids)
+            return doc_ids
         else:
-            # Add documents to existing store
+            # Add documents to existing store directly for small batches
             return self.vector_store.add_documents(documents)
-
+            
     def search(
         self,
         query: str,
-        user_info: Dict[str, Any] = None,
         k: int = 5,
         filter_metadata: Dict[str, Any] = None,
         hybrid_alpha: float = 0.5,  # Balance between vector and keyword search
     ) -> List[Document]:
         """
-        Search for documents in the vector store with security filtering.
+        Search for documents in the vector store.
 
         Args:
             query: Search query
-            user_info: User information for security filtering
-            k: Number of documents to return
-            filter_metadata: Additional metadata filter
-            hybrid_alpha: Ratio between vector and keyword search (0 = only keywords, 1 = only vector)
+            k: Number of results to return
+            filter_metadata: Metadata to filter results
+            hybrid_alpha: Control hybrid search between keyword and vector search
 
         Returns:
-            List of matching documents
+            List of relevant documents
         """
         if self.vector_store is None:
-            # Initialize an empty vector store if needed
             self._initialize_vector_store()
-            return []
 
-        # Create metadata filter
+        # Set up metadata filter
         metadata_filter = filter_metadata or {}
-
-        # Apply security filtering if user info is provided
-        if user_info:
-            # Get user ID for permission checks
-            user_id = user_info.get("user_id")
+        
+        # Handle hybrid search if enabled
+        hybrid_param = None
+        if self.hybrid_search:
+            hybrid_param = hybrid_alpha
+        
+        # For Pinecone, hybrid search requires additional configuration and may not work the same way
+        if self.vector_store_type == "pinecone" and hybrid_param is not None:
+            # Just pass it through - the PineconeStore will handle it appropriately
+            pass
             
-            # If we have a valid user ID, use the user manager to get a security filter
-            if user_id:
-                # Get permission-based filter from user manager
-                security_filter = self.user_manager.get_vector_store_filter(
-                    user_id=user_id,
-                    action="read"
-                )
-                
-                # Merge security filter with any existing filters
-                if security_filter:
-                    metadata_filter.update(security_filter)
-            else:
-                # Use the specialized security-aware search method if available
-                if hasattr(self.vector_store, "similarity_search_with_security"):
-                    return self.vector_store.similarity_search_with_security(
-                        query=query,
-                        user_info=user_info,
-                        k=k,
-                        filter=metadata_filter,
-                        hybrid_alpha=hybrid_alpha if self.hybrid_search else None
-                    )
-
-                # Legacy security filtering logic
-                if user_info.get("roles"):
-                    metadata_filter["allowed_roles"] = {
-                        "$in": user_info["roles"]
-                    }
-
-                # Add clearance level filtering
-                if user_info.get("clearance"):
-                    user_clearance = user_info["clearance"]
-                    # Convert to numeric levels for comparison based on schema.json
-                    clearance_levels = {
-                        "public": 0,
-                        "internal": 1,
-                        "confidential": 2
-                    }
-                    user_clearance_level = clearance_levels.get(user_clearance, 0)
-
-                    # Filter to only include documents with equal or lower security level
-                    eligible_levels = [
-                        k for k, v in clearance_levels.items() if v <= user_clearance_level
-                    ]
-                    metadata_filter["security_level"] = {
-                        "$in": eligible_levels
-                    }
-
-        # Use hybrid search if enabled
         results = self.vector_store.similarity_search(
             query, k=k, filter=metadata_filter,
-            hybrid_alpha=hybrid_alpha if self.hybrid_search else None
+            hybrid_alpha=hybrid_param
         )
-
-        # If user_info has a valid user_id, apply post-retrieval permission filtering
-        if user_info and user_info.get("user_id") and results:
-            # Get security levels for each document ID
-            user_id = user_info["user_id"]
-            
-            # Convert langchain Documents to dictionaries for filtering
-            doc_dicts = []
-            for doc in results:
-                doc_dict = {
-                    "doc_id": doc.metadata.get("doc_id") or doc.metadata.get("document_id"),
-                    "security_level": doc.metadata.get("security_level", "public"),
-                    "allowed_roles": doc.metadata.get("allowed_roles", []),
-                    "allowed_users": doc.metadata.get("allowed_users", []),
-                }
-                doc_dicts.append(doc_dict)
-                
-            # Get filtered document IDs that user can access
-            allowed_docs = self.user_manager.filter_documents(
-                user_id=user_id, 
-                documents=doc_dicts
-            )
-            
-            # Get IDs of allowed documents
-            allowed_ids = [doc.get("doc_id") for doc in allowed_docs]
-            
-            # Filter results to only include allowed documents
-            results = [
-                doc for doc in results 
-                if (doc.metadata.get("doc_id") in allowed_ids or 
-                    doc.metadata.get("document_id") in allowed_ids)
-            ]
 
         return results
 
@@ -265,33 +223,26 @@ class DocumentIndexer:
             return False
 
         try:
-            # AstraDB handles deletions in one operation
-            if hasattr(self.vector_store, "delete"):
-                self.vector_store.delete(document_ids)
-                return True
-            elif hasattr(self.vector_store, "delete_by_filter"):
-                for doc_id in document_ids:
-                    self.vector_store.delete_by_filter({"document_id": doc_id})
-                return True
-            return False
+            self.vector_store.delete(ids=document_ids)
+            return True
         except Exception as e:
             print(f"Error deleting documents: {e}")
             return False
 
     def load_index(self, **kwargs) -> bool:
         """
-        Load or reconnect to an existing AstraDB collection.
+        Load or reconnect to an existing vector store collection/index.
 
         Args:
-            **kwargs: Additional arguments to pass to AstraDBStore
+            **kwargs: Additional arguments to pass to the vector store
 
         Returns:
             Success status
         """
         try:
-            # For AstraDB, we just need to reconnect to the existing collection
+            # This just initializes the connection to the existing collection/index
             self._initialize_vector_store()
             return True
         except Exception as e:
-            print(f"Error connecting to AstraDB collection: {e}")
+            print(f"Error connecting to vector store: {e}")
             return False
