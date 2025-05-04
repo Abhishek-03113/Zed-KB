@@ -92,7 +92,7 @@ class RAGPipeline:
         # Check if user has admin role or admin clearance
         roles = user_info.get("roles", [])
         clearance = user_info.get("clearance", "public")
-        
+
         # Admin access is granted if:
         # 1. User has "admin" role in their roles list, OR
         # 2. User's clearance is explicitly set to "admin"
