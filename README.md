@@ -115,9 +115,6 @@ To make testing easy, use these credentials:
 
 ![Knowledge Base Management](Screenshots/knowledgebase%20management.png)
 
-**Other**
-
-![Screenshot](Screenshots/Screenshot%20from%202025-05-04%2020-03-03.png)
 
 ## Contributing
 
