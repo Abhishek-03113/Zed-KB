@@ -16,6 +16,9 @@ from .prompt_templates import create_rag_prompt, format_documents
 
 logger = logging.getLogger(__name__)
 
+from permit import Permit
+
+
 
 class RAGPipeline:
     """Orchestrates the RAG (Retrieval Augmented Generation) pipeline for Zed-KB."""
