@@ -17,7 +17,7 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 - **Vector Database Integration:** Uses Pinecone for scalable, semantic search over internal documents.
 - **RAG Pipeline with Gemini LLM:** Retrieval-Augmented Generation (RAG) answers user queries using only authorized, relevant content.
 - **Permit.io Authorization:** All sensitive AI actions (search, upload, chat, admin) are protected by Permit.io policies, enabling approval workflows and dynamic access control.
-- **Tiered Access Model:** Users are assigned roles (admin, user) and security levels. Only authorized users can access, quote, or export sensitive information.
+- **Tiered Access Model:** Users are assigned roles (admin, user) and security levels. Only authorized users can access and quote sensitive information.
 
 ## Architecture Overview
 
