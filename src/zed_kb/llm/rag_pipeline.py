@@ -78,10 +78,10 @@ class RAGPipeline:
 
     def _get_effective_access_level(self, user_info: Optional[Dict[str, Any]]) -> str:
         """
-        Determine the effective access level based on user clearance.
+        Determine the effective access level based on user role and security level.
 
         Args:
-            user_info: User information dict with clearance
+            user_info: User information dict with roles and clearance
 
         Returns:
             Effective access level for prompt selection ('admin' or 'user')
@@ -89,22 +89,14 @@ class RAGPipeline:
         if not user_info:
             return self.access_level
 
-        # Check if user has admin access
-        is_admin = user_info.get("is_admin", False)
-
-        # Map clearance levels to numeric values
-        clearance_levels = {
-            "public": 0,
-            "internal": 1,
-            "confidential": 2
-        }
-
-        # Get user's clearance level
-        user_clearance = user_info.get("clearance", "public")
-        user_level = clearance_levels.get(user_clearance, 0)
-
-        # Determine access level
-        if is_admin or user_level >= 2:  # admin or confidential clearance
+        # Check if user has admin role or admin clearance
+        roles = user_info.get("roles", [])
+        clearance = user_info.get("clearance", "public")
+        
+        # Admin access is granted if:
+        # 1. User has "admin" role in their roles list, OR
+        # 2. User's clearance is explicitly set to "admin"
+        if "admin" in roles or clearance == "admin":
             return "admin"
         else:
             return "user"

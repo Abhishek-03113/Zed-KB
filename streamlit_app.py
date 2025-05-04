@@ -32,80 +32,51 @@ API_URL = "http://localhost:8000"
 
 
 # User authentication functions
-def get_users():
-    """Load users from the config file"""
+def authenticate_with_api(username, password):
+    """Authenticate user with username and password via API"""
     try:
-        config_path = os.path.join("src", "zed_kb", "config", "schema.json")
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
-            return config.get("metadata", {}).get("allowed_users", [])
+        response = requests.post(
+            f"{API_URL}/login",
+            json={
+                "username": username,
+                "password": password,  # Send the password as-is, the server will hash it
+                "role": "",  # These will be filled by the server
+                "security_level": ""
+            }
+        )
+        if response.status_code == 200:
+            user_data = response.json()
+            return user_data.get("user", {})
+        return None
     except Exception as e:
-        st.error(f"Error loading user data: {str(e)}")
-    return []
+        st.error(f"Authentication error: {str(e)}")
+        return None
 
 
-def save_users(users):
-    """Save users to the config file"""
+def register_user_with_api(username, password, role="user"):
+    """Register a new user via API"""
     try:
-        config_path = os.path.join("src", "zed_kb", "config", "schema.json")
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
-
-            config["metadata"]["allowed_users"] = users
-
-            with open(config_path, "w") as f:
-                json.dump(config, f, indent=2)
-            return True
+        response = requests.post(
+            f"{API_URL}/signup",
+            json={
+                "username": username,
+                "password": password,  # Send the password as-is, the server will hash it
+                "role": role,
+                "security_level": "public"  # Default security level for new users
+            }
+        )
+        if response.status_code == 200:
+            return True, "User registered successfully"
+        else:
+            error_data = response.json()
+            return False, error_data.get("error", "Failed to register user")
     except Exception as e:
-        st.error(f"Error saving user data: {str(e)}")
-    return False
+        return False, f"Registration error: {str(e)}"
 
 
 def hash_password(password):
     """Simple password hashing"""
     return hashlib.sha256(password.encode()).hexdigest()
-
-
-def authenticate(username, password):
-    """Authenticate user with username and password"""
-    users = get_users()
-
-    # Hash the provided password
-    hashed_password = hash_password(password)
-
-    # Check if user exists and password matches
-    for user in users:
-        if user.get("username") == username and user.get("password") == hashed_password:
-            return user
-
-    return None
-
-
-def register_user(username, password, role="user"):
-    """Register a new user"""
-    users = get_users()
-
-    # Check if username already exists
-    for user in users:
-        if user.get("username") == username:
-            return False, "Username already exists"
-
-    # Create new user
-    new_user = {
-        "username": username,
-        "password": hash_password(password),
-        "role": role
-    }
-
-    users.append(new_user)
-
-    # Save updated users
-    if save_users(users):
-        return True, "User registered successfully"
-    else:
-        return False, "Failed to register user"
 
 
 def login_signup_page():
@@ -126,7 +97,7 @@ def login_signup_page():
             if not username or not password:
                 st.error("Please enter both username and password")
             else:
-                user = authenticate(username, password)
+                user = authenticate_with_api(username, password)
                 if user:
                     # Store user info in session state
                     st.session_state.logged_in = True
@@ -148,9 +119,15 @@ def login_signup_page():
             "Password", type="password", key="signup_password")
         confirm_password = st.text_input("Confirm Password", type="password")
 
-        # Only add role selection if there are no users (first user is admin)
-        users = get_users()
-        if not users:
+        # Check if first user (admin) exists
+        try:
+            response = requests.get(f"{API_URL}/users")
+            users_exist = response.status_code == 200 and len(
+                response.json().get("users", [])) > 0
+        except:
+            users_exist = False
+
+        if not users_exist:
             st.info("First user will be registered as admin")
             role = "admin"
         else:
@@ -162,7 +139,7 @@ def login_signup_page():
             elif new_password != confirm_password:
                 st.error("Passwords do not match")
             else:
-                success, message = register_user(
+                success, message = register_user_with_api(
                     new_username, new_password, role)
                 if success:
                     st.success(message)
@@ -276,7 +253,17 @@ def streamlit_app():
                 if st.button("Refresh Document List"):
                     with st.spinner("Loading documents..."):
                         try:
-                            response = requests.get(f"{API_URL}/documents")
+                            # Create auth header for admin access
+                            auth_header = json.dumps({
+                                "username": st.session_state.username,
+                                "password": st.session_state.get("password", "")
+                            })
+                            headers = {"Authorization": auth_header}
+
+                            response = requests.get(
+                                f"{API_URL}/documents",
+                                headers=headers
+                            )
                             if response.status_code == 200:
                                 documents = response.json()["documents"]
                                 if documents:
@@ -284,7 +271,8 @@ def streamlit_app():
                                 else:
                                     st.info("No documents found.")
                             else:
-                                st.error("Failed to load documents")
+                                st.error(
+                                    f"Failed to load documents: {response.text}")
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
 

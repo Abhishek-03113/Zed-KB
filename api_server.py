@@ -9,6 +9,9 @@ This file contains the FastAPI backend for the RAG chat application, which:
 - Implements authentication and authorization
 """
 
+from pymongo import MongoClient
+import pymongo
+import fix_collections
 from src.zed_kb.llm import GeminiLLM, RAGPipeline
 from src.zed_kb.vector_store.gemini_embeddings import GeminiEmbeddings
 from src.zed_kb.vector_store.pinecone_store import PineconeStore
@@ -35,15 +38,11 @@ import dotenv
 from pydantic import BaseModel
 
 
-class Usermodel(BaseModel): 
+class Usermodel(BaseModel):
     username: str
     password: str
     role: str
-    security_level: str 
-
-
-
-    
+    security_level: str
 
 
 # Add project root to path for importing zed_kb
@@ -77,26 +76,108 @@ security = HTTPBearer()
 
 # User authentication functions
 
+# mongodb connection
 
-def get_users():
-    """Load user data from config file"""
-    config_path = os.path.join("src", "zed_kb", "config", "schema.json")
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
-            config = json.load(f)
-        return config.get("metadata", {}).get("allowed_users", [])
-    return []
+# Fix for collections.MutableMapping import error in Python 3.11
+
+# Load MongoDB credentials from environment variables
+username = os.environ.get("MONGO_DATABASE_USERNAME")
+mongopass = os.environ.get("MONGO_DATABASE_PASSWORD")
+
+# MongoDB connection
+uri = f"mongodb+srv://{username}:{mongopass}@userscluster.eowq0cp.mongodb.net/?retryWrites=true&w=majority&appName=UsersCluster"
+mongo_client = MongoClient(uri)
+
+try:
+    mongo_client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(e)
+
+# Get the database and collection
+db = mongo_client["users"]
+collection = db["users"]
+# Create a collection if it doesn't exist
+
+if "users" not in db.list_collection_names():
+    db.create_collection("users")
+    print("Created collection: users")
+else:
+    print("Collection already exists: users")
+
+# define user model schema for MongoDB
+
+
+class User(BaseModel):
+    username: str
+    password: str
+    role: str
+    security_level: str
+
+# Function to create a user in MongoDB
+
+
+def create_user(user: User):
+    """Create a user in MongoDB"""
+    try:
+        # Check if the user already exists
+        existing_user = collection.find_one({"username": user.username})
+        if (existing_user):
+            print(f"User {user.username} already exists.")
+            return False
+
+        # Insert the new user into the collection
+        collection.insert_one(user.dict())
+        print(f"User {user.username} created successfully.")
+        return True
+    except Exception as e:
+        print(f"Error creating user: {e}")
+        return False
+
+# function to get specific user from MongoDB
+
+
+def get_user(username: str):
+    """Get a user from MongoDB"""
+
+    try:
+        # Find the user in the collection
+        user = collection.find_one({"username": username})
+        if user:
+            return User(**user)
+        else:
+            print(f"User {username} not found.")
+            return None
+    except Exception as e:
+        print(f"Error retrieving user: {e}")
+        return None
+
+
+def user_data(User):
+    return {
+        "username": User.username,
+        "role": User.role,
+        "security_level": User.security_level
+    }
 
 
 def authenticate(username: str, password: str):
-    """Authenticate a user"""
-    users = get_users()
-    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    """Authenticate a user by username and password"""
+    try:
+        # Hash the password
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
-    for user in users:
-        if user.get("username") == username and user.get("password") == hashed_password:
-            return user
-    return None
+        # Find the user in the collection
+        user = collection.find_one(
+            {"username": username, "password": hashed_password})
+        if user:
+            return User(**user)
+        else:
+            print("Invalid credentials")
+            return None
+    except Exception as e:
+        print(f"Error during authentication: {e}")
+        return None
 
 
 async def validate_token(request: Request):
@@ -133,7 +214,7 @@ async def validate_token(request: Request):
 async def validate_admin(request: Request):
     """Validate that the user is an admin"""
     user = await validate_token(request)
-    if user.get("role") != "admin":
+    if user.role != "admin":  # Fixed: access the attribute directly instead of using get()
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
@@ -145,69 +226,122 @@ async def validate_user(request: Request):
 # Create API endpoints
 
 
-def create_default_test_users():
-    """Create default test users if they don't exist"""
+@app.post("/signup")
+async def signup(user: Usermodel):
+    """Sign up a new user"""
     try:
-        config_path = os.path.join("src", "zed_kb", "config", "schema.json")
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
+        # Hash the password
+        hashed_password = hashlib.sha256(user.password.encode()).hexdigest()
 
-            users = config.get("metadata", {}).get("allowed_users", [])
+        # Create user object
+        new_user = User(
+            username=user.username,
+            password=hashed_password,
+            role=user.role,
+            security_level=user.security_level
+        )
 
-            # Check if users already exist
-            has_admin = any(u.get("username") == "admin" for u in users)
-            has_test_user = any(u.get("username") ==
-                                "test_user" for u in users)
-
-            # Add missing users
-            changes_made = False
-            if not has_admin:
-                # Admin password: "admin"
-                admin_hash = hashlib.sha256("admin".encode()).hexdigest()
-                users.append({
-                    "username": "admin",
-                    "password": admin_hash,
-                    "role": "admin"
-                })
-                changes_made = True
-                print("Created default admin user (username: admin, password: admin)")
-
-            if not has_test_user:
-                # Test user password: "password"
-                user_hash = hashlib.sha256("password".encode()).hexdigest()
-                users.append({
-                    "username": "test_user",
-                    "password": user_hash,
-                    "role": "user"
-                })
-                changes_made = True
-                print(
-                    "Created default test user (username: test_user, password: password)")
-
-            # Save changes if any users were added
-            if changes_made:
-                config["metadata"]["allowed_users"] = users
-                with open(config_path, "w") as f:
-                    json.dump(config, f, indent=2)
-                print("Updated user configuration file")
-
-            return True
+        # Create user in MongoDB
+        if create_user(new_user):
+            return {"message": "User created successfully"}
         else:
-            print(f"Warning: Config file not found at {config_path}")
-            return False
+            return JSONResponse(
+                status_code=400,
+                content={"error": "User already exists"}
+            )
     except Exception as e:
-        print(f"Error creating default test users: {e}")
-        return False
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error creating user: {str(e)}"}
+        )
+
+
+@app.post("/login")
+async def login(user: Usermodel):
+    """Log in a user"""
+    try:
+        # Authenticate user with the raw password
+        # The authenticate function will handle the hashing
+        authenticated_user = authenticate(user.username, user.password)
+
+        if authenticated_user:
+            return {"message": "Login successful", "user": user_data(authenticated_user)}
+        else:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid credentials"}
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error logging in: {str(e)}"}
+        )
+
+
+@app.get("/users")
+async def get_users():
+    """Get all users (admin only)"""
+    try:
+        # Get all users from MongoDB
+        users = list(collection.find())
+        return {"users": [user_data(User(**user)) for user in users]}
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error retrieving users: {str(e)}"}
+        )
+
+
+@app.get("/give_role/{username}/{role}")
+async def give_role(username: str, role: str):
+    """Give a role to a user (admin only)"""
+    try:
+        # Update the user's role in MongoDB
+        result = collection.update_one(
+            {"username": username},  # Filter to find the user
+            {"$set": {"role": role}}  # Update the user's role
+        )
+    except pymongo.errors.PyMongoError as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error updating user role: {str(e)}"}
+        )
+    if result.modified_count > 0:
+        return {"message": f"Role '{role}' assigned to user '{username}'"}
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"User '{username}' not found"}
+        )
+
+
+@app.get("/remove_role/{username}")
+async def remove_role(username: str):
+    """Remove a role from a user (admin only)"""
+    try:
+        # Update the user's role in MongoDB
+        result = collection.update_one(
+            {"username": username},  # Filter to find the user,
+            {"$set": {"role": "user"}}  # Update the user's role to 'user'
+        )
+    except pymongo.errors.PyMongoError as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error updating user role: {str(e)}"}
+        )
+    if result.modified_count > 0:
+        return {"message": f"Role removed from user '{username}'"}
+    else:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"User '{username}' not found"}
+        )
 
 
 @app.on_event("startup")
 async def startup():
     """Initialize components on startup"""
     global document_processor, rag_pipeline
-
-    # Create default test users for development
-    create_default_test_users()
 
     # Get Pinecone credentials from environment variables
     pinecone_api_key = os.environ.get("PINECONE_API_KEY")
@@ -336,8 +470,8 @@ async def chat_endpoint(request: Request):
         if rag_pipeline:
             # Set user info for querying based on user role
             user_info = {
-                "roles": [user.get("role", "user")],
-                "clearance": "public" if user.get("role") == "user" else "admin"
+                "roles": [user.role],  # Fixed: access the attribute directly
+                "clearance": "public" if user.role == "user" else "admin"  # Fixed: access the attribute directly
             }
 
             # Process the query through RAG pipeline
