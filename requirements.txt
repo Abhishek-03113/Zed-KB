@@ -20,3 +20,4 @@ PyMuPDF
 unstructured
 markdown
 google-generativeai
+python-multipart
