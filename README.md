@@ -31,7 +31,7 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/Abhishek-03113/Zed-KB/
 cd Zed-KB
 ```
 
@@ -92,6 +92,9 @@ To make testing easy, use these credentials:
 - **Dynamic, context-aware permissions:** Grant or revoke access instantly, even for new AI capabilities.
 - **Auditability:** All access decisions are logged and traceable.
 - **Separation of concerns:** Security logic is decoupled from application logic, reducing risk and complexity.
+
+## Demo/Screenshots
+
 
 ## Contributing
 
