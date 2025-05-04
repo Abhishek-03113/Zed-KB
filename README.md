@@ -95,6 +95,29 @@ To make testing easy, use these credentials:
 
 ## Demo/Screenshots
 
+**Authorization on Permit.io**
+
+![Permit.io Policy](Screenshots/permit_policy.png)
+![Permit.io Audit](Screenshots/permit_io_audit.png)
+
+**User Role Management**
+
+![User Role Management](Screenshots/user_role_mgmt.png)
+![User Roles](Screenshots/userroles.png)
+
+**Chat Screens**
+
+![Chat Screen](Screenshots/chat_screen.png)
+![Admin Chat](Screenshots/admin_chat.png)
+![User Chat](Screenshots/user_chat.png)
+
+**Knowledge Base Management**
+
+![Knowledge Base Management](Screenshots/knowledgebase%20management.png)
+
+**Other**
+
+![Screenshot](Screenshots/Screenshot%20from%202025-05-04%2020-03-03.png)
 
 ## Contributing
 
