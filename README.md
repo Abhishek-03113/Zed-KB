@@ -8,7 +8,6 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 
 - **Sensitive answers (e.g., HR, legal) require higher clearance**
 - **AI cannot summarize or quote documents unless explicitly allowed**
-- **Approval is required for exporting or sharing generated insights**
 - **All AI actions are subject to fine-grained, dynamic permission checks**
 
 ## Key Features
@@ -19,7 +18,6 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 - **RAG Pipeline with Gemini LLM:** Retrieval-Augmented Generation (RAG) answers user queries using only authorized, relevant content.
 - **Permit.io Authorization:** All sensitive AI actions (search, upload, chat, admin) are protected by Permit.io policies, enabling approval workflows and dynamic access control.
 - **Tiered Access Model:** Users are assigned roles (admin, user) and security levels. Only authorized users can access, quote, or export sensitive information.
-- **Approval Workflows:** Exporting or sharing generated insights can be restricted to require explicit admin approval.
 
 ## Architecture Overview
 
