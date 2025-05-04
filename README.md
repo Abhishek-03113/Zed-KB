@@ -85,6 +85,7 @@ To make testing easy, use these credentials:
 - **Add new roles or security levels** in Permit.io and update your policies as your organization grows.
 - **Integrate additional AI models** (OpenAI, Claude, etc.) by extending the vector store and LLM modules.
 - **Customize approval workflows** for any sensitive AI action.
+- **Building Better User Interface using Next.js for frontend** (Time Constraint made me switch to streamlit) 
 
 ## Benefits of Externalized Authorization (vs. Traditional Approaches)
 
