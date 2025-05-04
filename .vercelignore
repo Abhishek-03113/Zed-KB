@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+uploads/
+README.md
+src/zed_kb/document_processing/README.md
+.venv/
+streamlit_app.py

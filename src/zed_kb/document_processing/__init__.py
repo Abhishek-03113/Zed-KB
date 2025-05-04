@@ -11,7 +11,7 @@ class DocumentProcessor:
 
     def __init__(
         self,
-        embedding_provider: str = "openai",
+        embedding_provider: str = "gemini",
         embedding_model: str = "text-embedding-ada-002",
         collection_name: str = "zed_kb_documents",
         chunk_size: int = 1000,
@@ -24,7 +24,7 @@ class DocumentProcessor:
         Initialize the document processor.
 
         Args:
-            embedding_provider: Provider of embedding model ('openai' or 'gemini')
+            embedding_provider: Provider of embedding model ('gemini')
             embedding_model: Name of embedding model to use
             collection_name: Name of the collection/index to use
             chunk_size: Size of document chunks

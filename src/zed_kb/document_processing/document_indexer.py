@@ -11,7 +11,6 @@ from langchain.embeddings.base import Embeddings
 
 # Import our custom vector store and embedding models
 from ..vector_store.gemini_embeddings import GeminiEmbeddings
-from ..vector_store.openai_embeddings import OpenAIEmbeddings
 from ..vector_store.pinecone_store import PineconeStore
 
 
@@ -19,9 +18,6 @@ class DocumentIndexer:
     """Indexes documents in vector stores."""
 
     EMBEDDING_MODELS = {
-        "openai": lambda **kwargs: OpenAIEmbeddings(
-            model=kwargs.get("model", "text-embedding-ada-002")
-        ),
         "gemini": lambda **kwargs: GeminiEmbeddings(
             model=kwargs.get("model", "embedding-001"),
             task_type=kwargs.get("task_type", "RETRIEVAL_DOCUMENT")
@@ -30,8 +26,8 @@ class DocumentIndexer:
 
     def __init__(
         self,
-        embedding_provider: str = "openai",
-        embedding_model: str = "text-embedding-ada-002",
+        embedding_provider: str = "gemini",
+        embedding_model: str = "embedding-001",
         collection_name: str = "zed_kb_documents",
         hybrid_search: bool = False,
         pinecone_config: Optional[Dict[str, Any]] = None,
@@ -41,7 +37,7 @@ class DocumentIndexer:
         Initialize the document indexer.
 
         Args:
-            embedding_provider: Provider of embedding model ('openai' or 'gemini')
+            embedding_provider: Provider of embedding model ('gemini')
             embedding_model: Name of embedding model to use
             collection_name: Name of the collection/index to use
             hybrid_search: Whether to enable hybrid search (if supported)
