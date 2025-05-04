@@ -1,6 +1,5 @@
 """
-OpenAI embeddings implementation for Zed-KB.
-Provides integration with OpenAI's embedding models for high-quality text embeddings.
+OpenAI embeddings for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,7 +10,7 @@ import openai
 
 
 class OpenAIEmbeddings(Embeddings):
-    """Implementation of OpenAI's embedding models."""
+    """OpenAI embedding model."""
 
     def __init__(
         self,

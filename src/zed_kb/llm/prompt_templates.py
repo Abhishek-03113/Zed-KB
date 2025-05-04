@@ -1,6 +1,5 @@
 """
-Prompt templates for the Zed-KB RAG pipeline.
-Includes admin and user-level system prompts for different access permissions.
+Prompt templates for Zed-KB RAG pipeline.
 """
 
 from typing import List, Dict, Any
@@ -8,7 +7,6 @@ from langchain.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.schema import Document
 
-# System prompt for admin access with full permissions
 ADMIN_SYSTEM_PROMPT = """
 You are Zed-KB, an unrestricted AI-powered knowledge assistant designed to serve administrators with the highest level of access.
 
@@ -34,7 +32,6 @@ When generating responses for admins:
 8. Consider carefully how to best assist with complex or sensitive operations.
 """
 
-# System prompt for regular user access with restricted permissions
 USER_SYSTEM_PROMPT = """
 You are Zed-KB, a secure AI-powered knowledge assistant designed to answer questions based on public information.
 
@@ -56,7 +53,6 @@ When generating responses:
 5. If asked about sensitive or internal matters, politely explain you can only provide public information.
 """
 
-# Document format prompt
 DOCUMENT_PROMPT_TEMPLATE = """
 Document ID: {doc_id}
 Security Level: {security_level}
@@ -69,7 +65,6 @@ Content:
 ---
 """
 
-# Question answer prompt
 QUESTION_PROMPT_TEMPLATE = """
 Based on the context information and not prior knowledge, answer the question.
 
@@ -95,7 +90,6 @@ def create_rag_prompt(access_level: str = "user") -> ChatPromptTemplate:
     else:
         system_prompt = USER_SYSTEM_PROMPT
 
-    # Create the chat template
     system_message_prompt = SystemMessagePromptTemplate.from_template(
         system_prompt)
     human_message_prompt = HumanMessagePromptTemplate.from_template(
@@ -122,17 +116,14 @@ def format_documents(docs: List[Document]) -> str:
     formatted_docs = []
 
     for i, doc in enumerate(docs):
-        # Extract metadata
         metadata = doc.metadata
         doc_id = metadata.get("doc_id") or metadata.get(
             "document_id") or f"doc_{i+1}"
         security_level = metadata.get("security_level", "internal")
         source = metadata.get("source", "unknown")
 
-        # Check if direct quotes are allowed based on metadata
         allow_quotes = "yes" if metadata.get("allow_quotes", False) else "no"
 
-        # Format this document
         formatted_doc = DOCUMENT_PROMPT_TEMPLATE.format(
             doc_id=doc_id,
             security_level=security_level,

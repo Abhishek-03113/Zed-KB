@@ -1,6 +1,5 @@
 """
-Gemini embeddings implementation for Zed-KB.
-Provides integration with Google's Gemini embedding models.
+Gemini embeddings for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,7 +10,7 @@ from langchain.embeddings.base import Embeddings
 
 
 class GeminiEmbeddings(Embeddings):
-    """Implementation of Google's Gemini embedding models."""
+    """Google Gemini embedding model."""
 
     def __init__(
         self,

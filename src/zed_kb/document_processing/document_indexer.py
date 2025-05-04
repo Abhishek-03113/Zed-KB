@@ -1,6 +1,5 @@
 """
-Document indexer module for Zed-KB.
-Handles indexing of documents in vector stores.
+Indexes documents for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -17,7 +16,7 @@ from ..vector_store.pinecone_store import PineconeStore
 
 
 class DocumentIndexer:
-    """Handles indexing of documents in vector stores."""
+    """Indexes documents in vector stores."""
 
     EMBEDDING_MODELS = {
         "openai": lambda **kwargs: OpenAIEmbeddings(

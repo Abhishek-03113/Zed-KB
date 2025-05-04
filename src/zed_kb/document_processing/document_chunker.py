@@ -1,6 +1,5 @@
 """
-Document chunker module for Zed-KB.
-Handles intelligent chunking of documents based on semantic boundaries.
+Handles document chunking for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional, Union
@@ -17,7 +16,7 @@ from langchain_text_splitters.html import HTMLHeaderTextSplitter
 
 
 class DocumentChunker:
-    """Handles chunking of documents into manageable pieces."""
+    """Chunks documents into pieces."""
 
     CHUNK_STRATEGIES = {
         "recursive": RecursiveCharacterTextSplitter,

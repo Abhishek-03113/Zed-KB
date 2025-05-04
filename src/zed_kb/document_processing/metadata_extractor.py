@@ -1,13 +1,12 @@
 """
-Metadata extractor module for Zed-KB.
-Provides a uniform metadata schema for documents.
+Extracts metadata for Zed-KB documents.
 """
 from typing import List, Dict, Any, Optional
 from langchain.schema import Document
 
 
 class MetadataExtractor:
-    """Extracts and assigns uniform metadata to documents."""
+    """Extracts and assigns metadata."""
 
     def __init__(self):
         """Initialize the metadata extractor."""

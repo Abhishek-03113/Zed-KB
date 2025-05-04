@@ -1,13 +1,6 @@
 #!/usr/bin/env python
-"""
-RAG Chat Application - Streamlit Frontend
-
-This file contains the Streamlit frontend for the RAG chat application, which:
-- Provides a user interface for document upload and management
-- Offers a chat interface for interacting with the RAG system
-- Communicates with the FastAPI backend via HTTP requests
-- Implements user authentication with admin and regular user roles
-"""
+# Streamlit frontend for RAG Chat Application
+# Handles login, signup, chat, and document management UI
 
 import os
 import sys
@@ -21,26 +14,23 @@ import hashlib
 import streamlit as st
 import requests
 
-# Environment variables
-import dotenv
-
 # Load environment variables
+import dotenv
 dotenv.load_dotenv()
 
 # FastAPI backend URL
 API_URL = "http://localhost:8000"
 
-
-# User authentication functions
+# Utility functions
 def authenticate_with_api(username, password):
-    """Authenticate user with username and password via API"""
+    """Authenticate user with backend API"""
     try:
         response = requests.post(
             f"{API_URL}/login",
             json={
                 "username": username,
-                "password": password,  # Send the password as-is, the server will hash it
-                "role": "",  # These will be filled by the server
+                "password": password,
+                "role": "",
                 "security_level": ""
             }
         )
@@ -54,15 +44,15 @@ def authenticate_with_api(username, password):
 
 
 def register_user_with_api(username, password, role="user"):
-    """Register a new user via API"""
+    """Register new user with backend API"""
     try:
         response = requests.post(
             f"{API_URL}/signup",
             json={
                 "username": username,
-                "password": password,  # Send the password as-is, the server will hash it
+                "password": password,
                 "role": role,
-                "security_level": "public"  # Default security level for new users
+                "security_level": "public"
             }
         )
         if response.status_code == 200:
@@ -75,12 +65,12 @@ def register_user_with_api(username, password, role="user"):
 
 
 def hash_password(password):
-    """Simple password hashing"""
+    """Hash password using SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
-
+# Login/signup UI
 def login_signup_page():
-    """Display login/signup page"""
+    """Display login/signup interface"""
     st.title("📚 RAG-powered Chat Application")
 
     # Tabs for login and signup
@@ -103,7 +93,6 @@ def login_signup_page():
                     st.session_state.logged_in = True
                     st.session_state.username = user.get("username")
                     st.session_state.role = user.get("role", "user")
-                    # Store the password for API authentication
                     st.session_state.password = password
                     st.success(
                         f"Logged in as {username} ({st.session_state.role})")
@@ -131,7 +120,7 @@ def login_signup_page():
             st.info("First user will be registered as admin")
             role = "admin"
         else:
-            role = "user"  # Default role for new users
+            role = "user"
 
         if st.button("Sign Up"):
             if not new_username or not new_password:
@@ -147,15 +136,14 @@ def login_signup_page():
                     st.session_state.logged_in = True
                     st.session_state.username = new_username
                     st.session_state.role = role
-                    # Store the password for API authentication
                     st.session_state.password = new_password
                     st.rerun()
                 else:
                     st.error(message)
 
-
+# Main app logic
 def streamlit_app():
-    """Streamlit application for user interface"""
+    """Main application function"""
     st.set_page_config(
         page_title="RAG Chat Application",
         page_icon="🤖",
@@ -166,7 +154,7 @@ def streamlit_app():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
-    # If not logged in, show login/signup page
+    # Show login page if not logged in
     if not st.session_state.logged_in:
         login_signup_page()
         return
@@ -182,28 +170,27 @@ def streamlit_app():
             st.session_state.logged_in = False
             st.session_state.username = None
             st.session_state.role = None
-            # Clear chat history on logout
             if "chat_history" in st.session_state:
                 st.session_state.chat_history = []
             st.rerun()
 
-    # Initialize session state for chat history
+    # Initialize chat history
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Check if API is available
+    # Check API availability
     if not check_api_health():
         st.error(
             "⚠️ Cannot connect to API server. Please make sure the API server is running.")
         st.info("Run the API server with: `python api_server.py`")
         return
 
-    # Admin-only section: Document management
+    # Admin document management section
     if st.session_state.role == "admin":
         with st.sidebar:
             st.header("📄 Document Management")
 
-            # Document upload
+            # Document upload form
             with st.expander("Upload Document", expanded=True):
                 uploaded_file = st.file_uploader(
                     "Choose a file", type=["pdf", "txt", "docx"])
@@ -215,17 +202,15 @@ def streamlit_app():
 
                 if uploaded_file is not None and st.button("Upload"):
                     with st.spinner("Uploading document..."):
-                        # Create a temporary file
+                        # Process document upload
                         temp_file = tempfile.NamedTemporaryFile(delete=False)
                         temp_file.write(uploaded_file.getvalue())
                         temp_file.close()
 
-                        # Send to API for processing
                         files = {"file": (uploaded_file.name, open(
                             temp_file.name, "rb"), "application/octet-stream")}
                         data = {"security_level": security_level}
 
-                        # Create auth header
                         auth_header = json.dumps({
                             "username": st.session_state.username,
                             "password": st.session_state.get("password", "")
@@ -239,7 +224,6 @@ def streamlit_app():
                             headers=headers
                         )
 
-                        # Clean up temporary file
                         os.unlink(temp_file.name)
 
                         if response.status_code == 200:
@@ -248,12 +232,11 @@ def streamlit_app():
                         else:
                             st.error(f"Failed to upload: {response.text}")
 
-            # List documents (admin only)
+            # Document list viewer
             with st.expander("Manage Documents", expanded=False):
                 if st.button("Refresh Document List"):
                     with st.spinner("Loading documents..."):
                         try:
-                            # Create auth header for admin access
                             auth_header = json.dumps({
                                 "username": st.session_state.username,
                                 "password": st.session_state.get("password", "")
@@ -276,7 +259,7 @@ def streamlit_app():
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
 
-    # Main chat interface (available to all logged-in users)
+    # Chat interface (all users)
     st.header("💬 Chat")
 
     # Display chat history
@@ -284,7 +267,7 @@ def streamlit_app():
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-            # Show sources if available
+            # Display sources for assistant messages
             if message["role"] == "assistant" and "sources" in message:
                 if message["sources"]:
                     with st.expander("Sources"):
@@ -292,7 +275,7 @@ def streamlit_app():
                             st.markdown(f"**Source {i+1}:** {source['title']}")
                             st.markdown(f"*{source['snippet']}*")
 
-    # Chat input
+    # Chat input and response handling
     if prompt := st.chat_input("Ask a question about your documents"):
         # Add user message to chat history
         st.session_state.chat_history.append(
@@ -306,7 +289,6 @@ def streamlit_app():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Create auth header with current user's credentials
                     auth_header = json.dumps({
                         "username": st.session_state.username,
                         "password": st.session_state.get("password", "")
@@ -355,9 +337,9 @@ def streamlit_app():
                         "content": f"Sorry, I encountered an error: {str(e)}"
                     })
 
-
+# API health check
 def check_api_health():
-    """Check if the API server is available"""
+    """Check API server availability"""
     try:
         response = requests.get(f"{API_URL}/health")
         return response.status_code == 200

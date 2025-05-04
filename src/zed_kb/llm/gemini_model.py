@@ -1,6 +1,5 @@
 """
-Gemini 2.5 model integration for Zed-KB.
-Provides a LangChain-compatible interface to Google's Gemini 2.5 model.
+Gemini LLM for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional, Mapping, ClassVar
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiLLM(BaseLLM):
-    """Implementation of Google's Gemini models as a LangChain LLM."""
+    """Google Gemini LLM for LangChain."""
 
     # Class attributes for Pydantic V2 compatibility
     model_name: ClassVar[str] = "gemini-1.5-pro-latest"

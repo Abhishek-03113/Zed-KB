@@ -1,8 +1,8 @@
 """
-RAG (Retrieval Augmented Generation) Pipeline for Zed-KB.
-Orchestrates the query → retrieve → generate flow.
+RAG pipeline for Zed-KB.
 """
 
+from permit import Permit
 from typing import List, Dict, Any, Optional, Tuple, Union
 import logging
 
@@ -16,12 +16,9 @@ from .prompt_templates import create_rag_prompt, format_documents
 
 logger = logging.getLogger(__name__)
 
-from permit import Permit
-
-
 
 class RAGPipeline:
-    """Orchestrates the RAG (Retrieval Augmented Generation) pipeline for Zed-KB."""
+    """RAG pipeline orchestrator."""
 
     def __init__(
         self,

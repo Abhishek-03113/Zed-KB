@@ -1,16 +1,13 @@
 """
 Document processing package for Zed-KB.
-Contains components for loading, chunking, extracting metadata, and indexing documents.
 """
-
 from .document_loader import DocumentLoader
 from .document_chunker import DocumentChunker
 from .metadata_extractor import MetadataExtractor
 from .document_indexer import DocumentIndexer
 
-
 class DocumentProcessor:
-    """Main class that coordinates the document processing pipeline."""
+    """Coordinates document processing pipeline."""
 
     def __init__(
         self,

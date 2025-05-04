@@ -1,7 +1,5 @@
 """
-Document loader module for Zed-KB.
-Handles loading of various document formats including PDFs, Word documents,
-HTML, and text files.
+Handles document loading for Zed-KB.
 """
 
 from typing import List, Dict, Any, Optional
@@ -20,7 +18,7 @@ from langchain.schema import Document
 
 
 class DocumentLoader:
-    """Handles the loading of various document formats into a unified format."""
+    """Loads supported document formats."""
 
     SUPPORTED_EXTENSIONS = {
         # Document formats

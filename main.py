@@ -1,13 +1,6 @@
 #!/usr/bin/env python
-"""
-RAG Chat Application - FastAPI Backend
-
-This file contains the FastAPI backend for the RAG chat application, which:
-- Handles document upload and processing
-- Manages the RAG pipeline for answering queries
-- Provides API endpoints for the Streamlit frontend
-- Implements authentication and authorization
-"""
+# RAG Chat Application - FastAPI Backend
+# Handles API endpoints, authentication, document upload, and chat
 
 # Imports
 from pymongo import MongoClient
