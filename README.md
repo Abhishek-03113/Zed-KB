@@ -15,7 +15,7 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 - **Document Ingestion & Chunking:** Supports PDF, DOCX, HTML, TXT, and more. Documents are split into semantically meaningful chunks for efficient retrieval.
 - **Metadata Extraction & Security Classification:** Each document and chunk is tagged with security levels, allowed roles, and access policies.
 - **Vector Database Integration:** Uses Pinecone for scalable, semantic search over internal documents.
-- **RAG Pipeline with Gemini LLM:** Retrieval-Augmented Generation (RAG) answers user queries using only authorized, relevant content.
+- **RAG Pipeline with Gemini LLM and LangChain:** Retrieval-Augmented Generation (RAG) answers user queries using only authorized, relevant content, orchestrated by LangChain.
 - **Permit.io Authorization:** All sensitive AI actions (search, upload, chat, admin) are protected by Permit.io policies, enabling approval workflows and dynamic access control.
 - **Tiered Access Model:** Users are assigned roles (admin, user) and security levels. Only authorized users can access and quote sensitive information.
 
@@ -26,6 +26,7 @@ Modern AI systems can access, summarize, and generate insights from vast interna
 - **MongoDB:** Stores user accounts and roles.
 - **Pinecone:** Vector database for semantic document retrieval.
 - **Permit.io:** Centralized, externalized authorization for all AI and data actions.
+- **LangChain:** Orchestrates the RAG pipeline and LLM interactions.
 
 ## Getting Started
 
