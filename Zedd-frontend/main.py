@@ -495,7 +495,7 @@ def login_signup_page():
         )
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600)
 def fetch_users():
     """Fetch all users with caching"""
     data, status_code = api_request("users")
